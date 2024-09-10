@@ -673,7 +673,7 @@ if (NOT ("${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}"))
 #include \"${PROJECT_SOURCE_DIR}/${Header}\"
 ")
 
-    execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+    execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${PROJECT_BINARY_DIR}/${Header}.tmp"
       "${PROJECT_BINARY_DIR}/${Header}"
     )
@@ -687,7 +687,7 @@ if (NOT ("${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}"))
 #include \"mfem/${Header}\"
 ")
 
-    execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+    execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${PROJECT_BINARY_DIR}/InstallHeaders/${Header}.tmp"
       "${PROJECT_BINARY_DIR}/InstallHeaders/${Header}"
     )
