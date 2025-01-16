@@ -13,4 +13,5 @@ foreach(DATA_FILE ${DATA_FILES})
   list(APPEND COPIED_DATA_FILES ${COPIED_DATA_FILE})
 endforeach()
 
-add_custom_target(copy_data DEPENDS ${GENERATED_DATA_FILES})
+add_custom_target(copy_data DEPENDS ${COPIED_DATA_FILES}
+  COMMENT "Synching the data directory ...")
