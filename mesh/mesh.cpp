@@ -6130,6 +6130,60 @@ void Mesh::UpdateNURBS()
    GenerateFaces();
 }
 
+Mesh Mesh::GetLowOrderNURBSMesh() const
+{
+   MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
+   // Make a copy of this mesh
+   // Mesh lo_mesh(*this, true);
+   const int NP = NURBSext->GetNP();
+   const int dim = Dim;
+   // Make a copy of the NURBSPatches
+   Array<NURBSPatch*> lo_patches;
+   // lo_mesh.GetNURBSPatches(ho_patches);
+   // Array<const NURBSPatch*> lo_patches(ho_patches.Size());
+
+   // Loop over patches
+   for (int p = 0; p < NP; p++)
+   {
+      // const real_t* control_points = ho_patches[p]->GetData();
+      Array<const KnotVector *> lo_kv(Dim);
+      Array<const KnotVector *> ho_kv(Dim);
+      NURBSext->GetPatchKnotVectors(p, ho_kv);
+
+      // For each HO knotvector, construct the LO knotvector
+      // using the Greville abscissa
+      for (int d = 0; d < Dim; d++)
+      {
+         const KnotVector& kv = *ho_kv[d];
+         // Greville points are new knots
+         const int N = kv.GetNCP();
+         Vector grev_pts(N);
+         for (int i = 0; i < N; i++)
+         {
+            grev_pts[i] = kv.GetGreville(i);
+         }
+         lo_kv[d] = new KnotVector(1, grev_pts);
+
+         // sanity check
+         // cout << "lo_kv[" << d << "]= ";
+         // lo_kv[d]->Print(cout);
+      }
+      lo_patches[p] = new NURBSPatch(lo_kv, Dim+1);
+   }
+
+   // Create new NURBSExt
+   NURBSExtension* ext = new NURBSExtension(
+      NURBSext->GetPatchTopology(),
+      lo_patches);
+
+   // Now set control points
+   // TODO: Interpolate to proper values
+   ext->ConvertToPatches(*Nodes);
+
+   Mesh lo_mesh(*ext);
+   return lo_mesh;
+}
+
 void Mesh::LoadPatchTopo(std::istream &input, Array<int> &edge_to_ukv)
 {
    SetEmpty();
