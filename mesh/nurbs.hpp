@@ -248,6 +248,12 @@ public:
    /// @note The returned object should be deleted by the caller.
    KnotVector *DegreeElevate(int t) const;
 
+   /** @brief Return a new KnotVector with degree one and (p-1) additional
+       knots (number of control points is unchanged). The new knots are
+       are located at the Greville abscissa of the original knotvector. */
+   /// @note The returned object should be deleted by the caller.
+   KnotVector *LinearizeByGreville() const;
+
    /// Reverse the knots.
    void Flip();
 

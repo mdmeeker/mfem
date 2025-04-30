@@ -335,6 +335,24 @@ KnotVector *KnotVector::DegreeElevate(int t) const
    return newkv;
 }
 
+KnotVector *KnotVector::LinearizeByGreville() const
+{
+   MFEM_VERIFY(Order >= 1, "Order must be at least 1 to linearize.");
+   if (Order == 1)
+   {
+      return new KnotVector(*this);
+   }
+   // Get the Greville points
+   Vector grev_pts(NumOfControlPoints);
+   for (int i = 0; i < NumOfControlPoints; i++)
+   {
+      grev_pts[i] = GetGreville(i);
+   }
+   // Create a new knot vector with knots at the Greville points
+   KnotVector *newkv = new KnotVector(1, grev_pts);
+   return newkv;
+}
+
 void KnotVector::UniformRefinement(Vector &newknots, int rf) const
 {
    MFEM_VERIFY(rf > 1, "Refinement factor must be at least 2.");
@@ -1016,11 +1034,8 @@ void NURBSPatch::init(int dim)
       nk = kv[2]->GetNCP();
       MFEM_ASSERT(ni > 0 && nj > 0 && nk > 0,
                   "Invalid knot vector dimensions.");
-      mfem::out << "test.. ni: " << ni << " nj: " << nj << " nk: " << nk << endl;
-
       data = new real_t[ni*nj*nk*Dim];
 
-      mfem::out << "test.." << endl;
 
 #ifdef MFEM_DEBUG
       for (int i = 0; i < ni*nj*nk*Dim; i++)
@@ -1034,7 +1049,6 @@ void NURBSPatch::init(int dim)
    {
       mfem_error("NURBSPatch::init : Wrong dimension of knotvectors!");
    }
-   mfem::out << "end.." << endl;
 }
 
 NURBSPatch::NURBSPatch(const NURBSPatch &orig)
@@ -1115,17 +1129,12 @@ NURBSPatch::NURBSPatch(const KnotVector *kv0, const KnotVector *kv1,
 
 NURBSPatch::NURBSPatch(Array<const KnotVector *> &kvs, int dim)
 {
-   cout << "kvs.size: " << kvs.Size() << endl;
    kv.SetSize(kvs.Size());
    for (int i = 0; i < kv.Size(); i++)
    {
-      cout << "i: " << i << endl;
       kv[i] = new KnotVector(*kvs[i]);
    }
-   cout << "dim: " << dim << endl;
-   // 
    init(dim);
-   cout << "done init. " << endl;
 }
 
 NURBSPatch::NURBSPatch(NURBSPatch *parent, int dir, int Order, int NCP)
