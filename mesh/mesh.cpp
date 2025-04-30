@@ -4633,29 +4633,44 @@ Mesh::Mesh( const NURBSExtension& ext )
 {
    SetEmpty();
    /// make an internal copy of the NURBSExtension
+   cout << "mesh 1" << endl;
    NURBSext = new NURBSExtension( ext );
+   cout << "mesh 2" << endl;
 
    Dim              = NURBSext->Dimension();
    NumOfVertices    = NURBSext->GetNV();
    NumOfElements    = NURBSext->GetNE();
    NumOfBdrElements = NURBSext->GetNBE();
 
+   cout << "Dim = " << Dim << endl;
+   cout << "mesh 3" << endl;
    NURBSext->GetElementTopo(elements);
    NURBSext->GetBdrElementTopo(boundary);
+   cout << "mesh 4" << endl;
 
    vertices.SetSize(NumOfVertices);
+   cout << "mesh 5" << endl;
    if (NURBSext->HavePatches())
    {
+      cout << "mesh 6a" << endl;
       NURBSFECollection  *fec = new NURBSFECollection(NURBSext->GetOrder());
+      cout << "mesh 6b" << endl;
       FiniteElementSpace *fes = new FiniteElementSpace(this, fec, Dim,
                                                        Ordering::byVDIM);
+      cout << "mesh 6c" << endl;
       Nodes = new GridFunction(fes);
+      cout << "mesh 6d" << endl;
       Nodes->MakeOwner(fec);
+      cout << "mesh 6e" << endl;
       NURBSext->SetCoordsFromPatches(*Nodes);
+      cout << "mesh 6f" << endl;
       own_nodes = 1;
-      spaceDim = Nodes->VectorDim();
+      // spaceDim = Nodes->VectorDim(); // fails?
+      spaceDim = Dim;
+      cout << "mesh 6g" << endl;
       for (int i = 0; i < spaceDim; i++)
       {
+         cout << "mesh 6h, i=" << i << endl;
          Vector vert_val;
          Nodes->GetNodalValues(vert_val, i+1);
          for (int j = 0; j < NumOfVertices; j++)
@@ -4668,7 +4683,9 @@ Mesh::Mesh( const NURBSExtension& ext )
    {
       MFEM_ABORT("NURBS mesh has no patches.");
    }
+   cout << "mesh 7" << endl;
    FinalizeMesh();
+   cout << "mesh 8" << endl;
 }
 
 Element *Mesh::NewElement(int geom)
@@ -6130,57 +6147,86 @@ void Mesh::UpdateNURBS()
    GenerateFaces();
 }
 
-Mesh Mesh::GetLowOrderNURBSMesh() const
+Mesh Mesh::GetLowOrderNURBSMesh()
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
+
+   cout << "Creating low order mesh..." << endl;
+
    // Make a copy of this mesh
    // Mesh lo_mesh(*this, true);
    const int NP = NURBSext->GetNP();
-   const int dim = Dim;
    // Make a copy of the NURBSPatches
-   Array<NURBSPatch*> lo_patches;
+   Array<NURBSPatch*> lo_patches(NP);
    // lo_mesh.GetNURBSPatches(ho_patches);
    // Array<const NURBSPatch*> lo_patches(ho_patches.Size());
+   std::vector<Array<const KnotVector*>> lo_kvs(NP);
 
    // Loop over patches
    for (int p = 0; p < NP; p++)
    {
-      // const real_t* control_points = ho_patches[p]->GetData();
-      Array<const KnotVector *> lo_kv(Dim);
-      Array<const KnotVector *> ho_kv(Dim);
+      cout << "1" << endl;
+      lo_kvs[p].SetSize(Dim);
+      cout << "2" << endl;
+      Array<const KnotVector*> ho_kv(Dim);
+      cout << "3" << endl;
       NURBSext->GetPatchKnotVectors(p, ho_kv);
+      cout << "4" << endl;
 
       // For each HO knotvector, construct the LO knotvector
       // using the Greville abscissa
+      int NCPTS = Dim+1;
       for (int d = 0; d < Dim; d++)
       {
-         const KnotVector& kv = *ho_kv[d];
          // Greville points are new knots
-         const int N = kv.GetNCP();
+         const int N = ho_kv[d]->GetNCP();
          Vector grev_pts(N);
          for (int i = 0; i < N; i++)
          {
-            grev_pts[i] = kv.GetGreville(i);
+            grev_pts[i] = ho_kv[d]->GetGreville(i);
          }
-         lo_kv[d] = new KnotVector(1, grev_pts);
+         lo_kvs[p][d] = new KnotVector(1, grev_pts);
+
+         NCPTS *= N;
 
          // sanity check
-         // cout << "lo_kv[" << d << "]= ";
-         // lo_kv[d]->Print(cout);
+         cout << "lo_kv[" << d << "]= ";
+         lo_kvs[p][d]->Print(cout);
       }
-      lo_patches[p] = new NURBSPatch(lo_kv, Dim+1);
+      // TODO - set control points here
+      Array<real_t> cpts(NCPTS);
+      cout << "a" << endl;
+      lo_patches[p] = new NURBSPatch(lo_kvs[p], 4);
+      cout << "b" << endl;
    }
 
    // Create new NURBSExt
-   NURBSExtension* ext = new NURBSExtension(
+   cout << "c" << endl;
+   NURBSExtension ext(
       NURBSext->GetPatchTopology(),
       lo_patches);
+   cout << "d" << endl;
 
    // Now set control points
-   // TODO: Interpolate to proper values
-   ext->ConvertToPatches(*Nodes);
+   // TODO - Interpolate to proper values
+   cout << "Nodes =" << endl;
+   Nodes->Print(mfem::out);
+   cout << endl;
+   cout << "Nodes.VectorDim =" << Nodes->VectorDim() << endl;
 
-   Mesh lo_mesh(*ext);
+   // TODO - this isn't working so well, try set control points manually
+   // ext.ConvertToPatches(*Nodes);
+   // ext.Get
+   cout << "e" << endl;
+   // testing
+   const real_t* data = ext.GetPatch(0)->GetData();
+   cout << "data[3] = " << data[3] << endl;
+
+   Mesh lo_mesh(ext);
+   // Mesh lo_mesh(*this, true);
+   cout << "f" << endl;
+   // lo_mesh.NURBSext
+   cout << "g" << endl;
    return lo_mesh;
 }
 
