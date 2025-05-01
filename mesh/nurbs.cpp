@@ -335,21 +335,39 @@ KnotVector *KnotVector::DegreeElevate(int t) const
    return newkv;
 }
 
-KnotVector *KnotVector::LinearizeByGreville() const
+KnotVector *KnotVector::Linearize(SplineProjectionType projection_type) const
 {
    MFEM_VERIFY(Order >= 1, "Order must be at least 1 to linearize.");
-   if (Order == 1)
+
+   // Set the method for computing the new knots
+   std::function<real_t(int)> GetPoints;
+   if ( projection_type == SplineProjectionType::Greville )
    {
-      return new KnotVector(*this);
+      GetPoints = [&](int i) -> real_t { return GetGreville(i); };
    }
-   // Get the Greville points
-   Vector grev_pts(NumOfControlPoints);
+   else if ( projection_type == SplineProjectionType::Botella )
+   {
+      GetPoints = [&](int i) -> real_t { return GetBotella(i); };
+   }
+   else if ( projection_type == SplineProjectionType::Demko )
+   {
+      ComputeDemko();
+      GetPoints = [&](int i) -> real_t { return demko[i]; };
+   }
+   else
+   {
+      mfem_error("Unknown spline projection type");
+   }
+
+   // Get the new knots
+   Vector newknots(NumOfControlPoints);
    for (int i = 0; i < NumOfControlPoints; i++)
    {
-      grev_pts[i] = GetGreville(i);
+      newknots[i] = GetPoints(i);
    }
-   // Create a new knot vector with knots at the Greville points
-   KnotVector *newkv = new KnotVector(1, grev_pts);
+
+   // Return the new knot vector
+   KnotVector *newkv = new KnotVector(1, newknots);
    return newkv;
 }
 

@@ -29,6 +29,12 @@ namespace mfem
 
 class GridFunction;
 
+enum class SplineProjectionType
+{
+   Greville,
+   Botella,
+   Demko,
+};
 
 /** @brief A vector of knots in one dimension, with B-spline basis functions of
     a prescribed order.
@@ -250,9 +256,10 @@ public:
 
    /** @brief Return a new KnotVector with degree one and (p-1) additional
        knots (number of control points is unchanged). The new knots are
-       are located at the Greville abscissa of the original knotvector. */
+       are located at points determined by SplineProjectionType (e.g.
+       Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
-   KnotVector *LinearizeByGreville() const;
+   KnotVector *Linearize(SplineProjectionType projection_type=SplineProjectionType::Greville) const;
 
    /// Reverse the knots.
    void Flip();
