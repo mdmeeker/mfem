@@ -154,18 +154,32 @@ int main(int argc, char *argv[])
    solver.SetOperator(*A);
 
    // Get patches
-   Array<const KnotVector*> kv(dim);
-   mesh.NURBSext->GetPatchKnotVectors(0, kv);
+   Array<const KnotVector*> kvs(dim);
+   mesh.NURBSext->GetPatchKnotVectors(0, kvs);
+
    // Get greville points
-   Vector greville(kv[0]->GetNCP());
-   for (int i = 0; i < kv[0]->GetNCP(); i++) { greville[i] = kv[0]->GetGreville(i); }
+   int I = 0;
+   KnotVector* kv_ = new KnotVector(2, Vector({0.,0.,0.,1.,1.5,2.,2.,4.,5.,6.,6.,6.}));
+   KnotVector* kv = kv_->DegreeElevate(1);
+
+   Vector greville(kv->GetNCP());
+   for (int i = 0; i < kv->GetNCP(); i++) { greville[i] = kv->GetGreville(i); }
+
    // Print
-   cout << "Knots : "; kv[0]->Print(mfem::out);
+   cout << "Knots : "; kv->Print(mfem::out);
    cout << "Greville points : "; greville.Print(mfem::out, 32);
+
+   KnotVector* kvg = kv->Linearize();
+   cout << "LO Knots (grv) : "; kvg->Print(mfem::out);
+
+   KnotVector* kvb = kv->Linearize(SplineProjectionType::Botella);
+   cout << "LO Knots (bot): "; kvb->Print(mfem::out);
 
    // Create the LOR mesh
    // Modify patches?
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh();
+   // Mesh lo_mesh = mesh.GetLowOrderNURBSMesh();
+
+
 
    // Mesh lo_mesh(*mesh.NURBSext);
 

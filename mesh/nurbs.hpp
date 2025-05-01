@@ -438,6 +438,13 @@ public:
 
    void DegreeElevate(int t);
 
+   /** @brief Return a new NURBSPatch with degree one in each dimension
+       and (number of control points is unchanged). The new knots are
+       are located at points determined by SplineProjectionType (e.g.
+       Greville, Botella, Demko) applied to the original KnotVector. */
+   /// @note The returned object should be deleted by the caller.
+   // NURBSPatch *Linearize(SplineProjectionType projection_type=SplineProjectionType::Greville) const;
+
    /** @brief Refine with optional refinement factor @a rf. Uniform means
        refinement is done everywhere by the same factor, although nonuniform
        spacing functions may be used.
@@ -526,6 +533,13 @@ public:
    /** Elevate KnotVectors in all directions to degree @a degree if given,
        otherwise to the maximum current degree among all directions. */
    int MakeUniformDegree(int degree = -1);
+
+   /** @brief Evaluate the B-NET at knot location @a u to get its value in
+      physical space. Vector @a x will be resized to the same size as @a u. */
+   // void Evaluate(const Vector &u, Vector &x) const;
+   /** @brief Modify the control points of patch @a p such that it
+       interpolates the B-NET of this patch */
+   void FitControlPoints(NURBSPatch &p) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */
