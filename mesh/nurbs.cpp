@@ -2181,29 +2181,6 @@ int NURBSPatch::MakeUniformDegree(int degree)
    return maxd;
 }
 
-void NURBSPatch::FitControlPoints(NURBSPatch &p) const
-{
-   // Check that the incoming patch has same reference & physical dimensions
-   if (p.kv.Size() != kv.Size() || p.Dim != Dim)
-   {
-      mfem_error("NURBSPatch::FitControlPoints(): Dimension mismatch");
-   }
-   // Check that the incoming knotvectors are contained within the current ones
-   for (int d = 0; d < kv.Size(); d++)
-   {
-      if ( ((*p.kv[d])[0] < (*kv[d])[0]) ||
-           ((*p.kv[d])[p.kv[d]->Size()-1] > (*kv[d])[kv[d]->Size()-1]) )
-         {
-            mfem_error("NURBSPatch::FitControlPoints(): Domain of "
-            "incoming patch is not contained within domain of interpolating patch");
-         }
-   }
-
-   // 
-   x.SetSize(u.Size());
-
-}
-
 NURBSPatch *Interpolate(NURBSPatch &p1, NURBSPatch &p2)
 {
    if (p1.kv.Size() != p2.kv.Size() || p1.Dim != p2.Dim)

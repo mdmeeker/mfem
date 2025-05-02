@@ -2437,7 +2437,7 @@ public:
    void DegreeElevate(int rel_degree, int degree = 16);
    ///@}
 
-   Mesh GetLowOrderNURBSMesh();
+   Mesh GetLowOrderNURBSMesh2D();
 
    /// @name Print/Save/Export methods
    /// @{

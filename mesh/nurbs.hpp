@@ -534,13 +534,6 @@ public:
        otherwise to the maximum current degree among all directions. */
    int MakeUniformDegree(int degree = -1);
 
-   /** @brief Evaluate the B-NET at knot location @a u to get its value in
-      physical space. Vector @a x will be resized to the same size as @a u. */
-   // void Evaluate(const Vector &u, Vector &x) const;
-   /** @brief Modify the control points of patch @a p such that it
-       interpolates the B-NET of this patch */
-   void FitControlPoints(NURBSPatch &p) const;
-
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */
    /// @note The returned object should be deleted by the caller.

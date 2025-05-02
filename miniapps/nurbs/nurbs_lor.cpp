@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
    Hypre::Init();
 
    // 1. Parse command-line options.
-   const char *mesh_file = "../../data/cube-nurbs.mesh";
+   const char *mesh_file = "../../data/square-nurbs.mesh";
    bool pa = false;
    bool patchAssembly = false;
    int ref_levels = 0;
@@ -158,9 +158,7 @@ int main(int argc, char *argv[])
    mesh.NURBSext->GetPatchKnotVectors(0, kvs);
 
    // Get greville points
-   int I = 0;
-   KnotVector* kv_ = new KnotVector(2, Vector({0.,0.,0.,1.,1.5,2.,2.,4.,5.,6.,6.,6.}));
-   KnotVector* kv = kv_->DegreeElevate(1);
+   const KnotVector* kv = kvs[0];
 
    Vector greville(kv->GetNCP());
    for (int i = 0; i < kv->GetNCP(); i++) { greville[i] = kv->GetGreville(i); }
@@ -177,11 +175,7 @@ int main(int argc, char *argv[])
 
    // Create the LOR mesh
    // Modify patches?
-   // Mesh lo_mesh = mesh.GetLowOrderNURBSMesh();
-
-
-
-   // Mesh lo_mesh(*mesh.NURBSext);
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh2D();
 
 
 
