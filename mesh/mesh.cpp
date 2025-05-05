@@ -6190,6 +6190,7 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
          lo_kvs[p][d] = ho_kvs[d]->Linearize(SplineProjectionType::Greville);
 
          // sanity check
+         cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);
          cout << "lo_kv[" << d << "]= "; lo_kvs[p][d]->Print(cout);
       }
 
@@ -6201,12 +6202,12 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
       px = hkv0.GetOrder();
       py = hkv1.GetOrder();
 
-      for (int i = 0; i < ncp[0]; i++)
+      for (int i = 1; i < ncp[0]+1; i++)
       {
          ux = kv0[i];
          ex = hkv0.GetSpan(ux) - px;
          x = hkv0.GetRefPoint(ux, ex + px);
-         for (int j = 0; j < ncp[1]; j++)
+         for (int j = 1; j < ncp[1]+1; j++)
          {
             uy = kv1[j];
             ey = hkv1.GetSpan(uy) - py;

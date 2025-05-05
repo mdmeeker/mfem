@@ -177,10 +177,6 @@ int main(int argc, char *argv[])
    // Modify patches?
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh2D();
 
-
-
-
-
    return 0;
 }
 
