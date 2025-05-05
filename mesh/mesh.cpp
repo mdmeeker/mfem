@@ -6241,12 +6241,18 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
    cout << "Nodes.VectorDim =" << Nodes->VectorDim() << endl;
 
    // TODO - this isn't working so well, try set control points manually
+   Array<NURBSPatch *> ho_patches(NP);
+   GetNURBSPatches(ho_patches);
+   ho_patches[0]->GetKV(0)->Print(mfem::out);
    // ext.ConvertToPatches(*Nodes);
-   // ext.Get
+   // const NURBSPatch* P = ext.GetPatch(0);
    cout << "e" << endl;
    // testing
-   const real_t* data = ext.GetPatch(0)->GetData();
-   cout << "data[3] = " << data[3] << endl;
+   // const real_t* data = ext.GetPatch(0)->GetData();
+   Array<real_t> data;
+   ho_patches[0]->GetData(data);
+   cout << "data :" << endl;
+   data.Print(mfem::out);
 
    Mesh lo_mesh(ext);
    // Mesh lo_mesh(*this, true);
@@ -10900,10 +10906,10 @@ void Mesh::NURBSCoarsening(int cf, real_t tol)
    }
 }
 
-void Mesh::GetNURBSPatches(Array<NURBSPatch*> patches)
+void Mesh::GetNURBSPatches(Array<NURBSPatch*> &patches)
 {
    MFEM_VERIFY(NURBSext, "Must be a NURBS mesh");
-   // This sets the NURBSPatch(es) from the control points (Nodes)
+   // This sets the data in NURBSPatch(es) from the control points (Nodes)
    NURBSext->ConvertToPatches(*Nodes);
    const int NP = NURBSext->GetNP();
 

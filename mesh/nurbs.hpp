@@ -483,8 +483,22 @@ public:
    /// @note The returned object should NOT be deleted by the caller.
    KnotVector *GetKV(int dir) { return kv[dir]; }
 
+   int GetDataSize() const;
+
    /// Get the data (control points) of this patch
-   const real_t* GetData() const { return data; }
+   /// Returns a copy of data (control points) for this patch
+   // const real_t* GetData() const { return data; }
+   void GetData(Array<real_t> &d) const
+   {
+      mfem::out << "GetData: nd=" << nd << std::endl;
+      const int ND = GetDataSize();
+      d.SetSize(ND);
+      for (int i = 0; i < ND; i++)
+      {
+         d[i] = data[i];
+      }
+      mfem::out << "GetData: data[5]=" << data[5] << std::endl;
+   }
 
    // Standard B-NET access functions
 
@@ -1022,7 +1036,7 @@ public:
    void GetPatchDofs(const int patch, Array<int> &dofs);
 
    /// Return NURBSPatch object
-   const NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
+   NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
 
    /// Return patch topology
    const Mesh* GetPatchTopology() const { return patchTopo; }
