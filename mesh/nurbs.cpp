@@ -1008,65 +1008,35 @@ void KnotVector::Difference(const KnotVector &kv, Vector &diff) const
 
 void NURBSPatch::init(int dim)
 {
-   MFEM_ASSERT(dim > 1, "NURBS patch dimension (including weight) must be "
-               "greater than 1.");
+   MFEM_ASSERT(dim > 1 && dim < 5,
+               "NURBS patch dimension (including weight) must be "
+               "within [2, 4].");
+   const int nkv = kv.Size();
+   MFEM_ASSERT(nkv > 0 && nkv < 4,
+               "NURBSPatch::init : Wrong dimension of knotvectors!");
    Dim = dim;
    sd = nd = -1;
 
-   if (kv.Size() == 1)
+   // Set the number of control points per dimension
+   std::vector<int> ncps(3,-1);
+   for (int i = 0; i < nkv; i++)
    {
-      ni = kv[0]->GetNCP();
-      MFEM_ASSERT(ni > 0, "Invalid knot vector dimension.");
-      nj = -1;
-      nk = -1;
+      ncps[i] = kv[i]->GetNCP();
+      MFEM_ASSERT(ncps[i] > 0, "Invalid knot vector dimension.");
+   }
+   ni = ncps[0];
+   nj = ncps[1];
+   nk = ncps[2];
 
-      data = new real_t[ni*Dim];
-
+   // Allocate space for data
+   const int data_size = GetDataSize();
+   data = new real_t[data_size];
 #ifdef MFEM_DEBUG
-      for (int i = 0; i < ni*Dim; i++)
-      {
-         data[i] = -999.99;
-      }
-#endif
-   }
-   else if (kv.Size() == 2)
+   for (int i = 0; i < data_size; i++)
    {
-      ni = kv[0]->GetNCP();
-      nj = kv[1]->GetNCP();
-      MFEM_ASSERT(ni > 0 && nj > 0, "Invalid knot vector dimensions.");
-      nk = -1;
-
-      data = new real_t[ni*nj*Dim];
-
-#ifdef MFEM_DEBUG
-      for (int i = 0; i < ni*nj*Dim; i++)
-      {
-         data[i] = -999.99;
-      }
+      data[i] = -999.99;
+   }
 #endif
-   }
-   else if (kv.Size() == 3)
-   {
-      ni = kv[0]->GetNCP();
-      nj = kv[1]->GetNCP();
-      nk = kv[2]->GetNCP();
-      MFEM_ASSERT(ni > 0 && nj > 0 && nk > 0,
-                  "Invalid knot vector dimensions.");
-      data = new real_t[ni*nj*nk*Dim];
-
-
-#ifdef MFEM_DEBUG
-      for (int i = 0; i < ni*nj*nk*Dim; i++)
-      {
-         mfem::out << "debug.." << endl;
-         data[i] = -999.99;
-      }
-#endif
-   }
-   else
-   {
-      mfem_error("NURBSPatch::init : Wrong dimension of knotvectors!");
-   }
 }
 
 NURBSPatch::NURBSPatch(const NURBSPatch &orig)
