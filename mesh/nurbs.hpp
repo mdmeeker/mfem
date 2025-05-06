@@ -59,11 +59,20 @@ protected:
    /// Number of elements, defined by distinct knots.
    int NumOfElements;
 
+   /// Stores the values of unique knots.
+   mutable Vector uknot;
+
+   /// Stores the unique knot multiplicities.
+   mutable Vector uknot_mult;
+
    // Stores the demko points
    mutable Vector demko;
 
    /// Compute all the Demko points
    void ComputeDemko() const;
+
+   /// Compute unique knots and their multiplicities.
+   void ComputeUniqueKnots() const;
 
 public:
    /// Create an empty KnotVector.
@@ -129,6 +138,9 @@ public:
 
    /// Return the index of the knot span containing parameter @a u.
    int GetSpan(real_t u) const;
+
+   /// Return the index of the unique knot span containing parameter @a u.
+   int GetUniqueSpan(real_t u) const;
 
    /** @brief Return the reference coordinate in [0,1] for parameter @a u
        in the element beginning at knot @a ni. */
@@ -260,6 +272,10 @@ public:
        Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
    KnotVector *Linearize(SplineProjectionType projection_type=SplineProjectionType::Greville) const;
+
+   real_t GetUniqueKnot(int i) const;
+
+   real_t GetKnotMult(int i) const;
 
    /// Reverse the knots.
    void Flip();

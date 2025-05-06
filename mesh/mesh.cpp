@@ -6196,6 +6196,11 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
          cout << "lo_kv[" << d << "]= "; lo_kvs[d]->Print(cout);
       }
 
+      // Debugging
+      cout << "Patch " << p << ": " << endl;
+      cout << "  nel = " << nel[0] << " x " << nel[1] << endl;
+      cout << "  ncp = " << ncp[0] << " x " << ncp[1] << endl;
+
       // Evaluate HO B-NET to get LO control points
       const KnotVector kv0 = *lo_kvs[0];
       const KnotVector kv1 = *lo_kvs[1];
@@ -6220,13 +6225,18 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
             ex = hkv0.GetSpan(ux) - px;
             x = hkv0.GetRefPoint(ux, ex + px);
 
+            // Debugging
+            cout << "[element " << setw(2) << offset+ex+ey*nel[0] << "]";
+            cout << "  e=(" << setw(2) << ex << " , " << setw(2) << ey << ")";
+            cout << "  u=(" << setw(4) << ux << " , " << setw(4) << uy << ")";
+            cout << "  x=(" << setw(4) << x  << " , " << setw(4) << y << ")";
+
             // Get the value of the HO B-NET at (x,y)
             ip.Set2(x,y);
             Nodes->GetVectorValue(offset+ex+ey*nel[0], ip, vals);
-            cout << "[element " << ex+ey*nel[0] << "]";
-            cout << "  u=(" << ux << ", " << uy << ")";
-            cout << "  x=(" << x << ", " << y << ")";
-            cout << "  c=(" << vals[0] << ", " << vals[1] << ")" << endl;
+
+            // Debugging
+            cout << "  c=(" << setw(4) << vals[0] << " , " << setw(4) << vals[1] << ")" << endl;
 
             // Set the control points (+ weight) for the LO mesh
             for (int sd = 0; sd < sdim; sd++)
@@ -6237,6 +6247,7 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
          }
       }
       offset += patch_nel;
+      cout << "offset = " << offset << endl;
 
       cout << "control_points :" << endl;
       control_points.Print(mfem::out);

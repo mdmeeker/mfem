@@ -185,6 +185,53 @@ int KnotVector::GetSpan(real_t u) const
    return mid;
 }
 
+int KnotVector::GetUniqueSpan(real_t u) const
+{
+   real_t low, high;
+   low = GetUniqueKnot(0);
+   for (int i = 1; i < NumOfElements; i++)
+   {
+      high = GetUniqueKnot(i);
+      if (u >= low && u < high)
+      {
+         return i;
+      }
+      low = high;
+   }
+
+   mfem_error("Knot location outside of the range of the KnotVector");
+}
+
+void KnotVector::ComputeUniqueKnots() const
+{
+   uknot.SetSize(NumOfElements+1);
+   uknot_mult.SetSize(NumOfElements+1);
+
+   real_t x0 = knot[0];
+   uknot[0] = x0;
+   int idx = 1;
+   int mult = 1;
+
+   for (int i=1; i<knot.Size(); ++i)
+   {
+      if (knot[i] != x0)
+      {
+         uknot[idx] = knot[i];
+         uknot_mult[idx-1] = mult;
+
+         // Reset
+         x0 = knot[i];
+         idx++;
+         mult = 1;
+      }
+      else
+      {
+         mult++;
+      }
+   }
+   uknot_mult[idx-1] = mult;
+}
+
 real_t KnotVector::GetGreville(int i) const
 {
    real_t sum = 0.0;
@@ -369,6 +416,22 @@ KnotVector *KnotVector::Linearize(SplineProjectionType projection_type) const
    // Return the new knot vector
    KnotVector *newkv = new KnotVector(1, newknots);
    return newkv;
+}
+
+real_t KnotVector::GetUniqueKnot(int i) const {
+   if (uknot.Size() == 0)
+   {
+      ComputeUniqueKnots();
+   }
+   return uknot[i];
+}
+
+real_t KnotVector::GetKnotMult(int i) const {
+   if (uknot_mult.Size() == 0)
+   {
+      ComputeUniqueKnots();
+   }
+   return uknot_mult[i];
 }
 
 void KnotVector::UniformRefinement(Vector &newknots, int rf) const
