@@ -6216,14 +6216,15 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
       {
          // Get reference coordinate in HO element (y)
          uy = kv1[j+1]; // +1 because of repeated knot at start
-         ey = hkv1.GetSpan(uy) - py;
-         y = hkv1.GetRefPoint(uy, ey + py);
+         y = hkv1.GetRefPoint(uy, hkv1.GetSpan(uy));
+         ey = hkv1.GetUniqueSpan(uy);
+
          for (int i = 0; i < ncp[0]; i++)
          {
             // Get reference coordinate in HO element (x)
             ux = kv0[i+1];
-            ex = hkv0.GetSpan(ux) - px;
-            x = hkv0.GetRefPoint(ux, ex + px);
+            x = hkv0.GetRefPoint(ux, hkv0.GetSpan(ux));
+            ex = hkv0.GetUniqueSpan(ux);
 
             // Debugging
             cout << "[element " << setw(2) << offset+ex+ey*nel[0] << "]";

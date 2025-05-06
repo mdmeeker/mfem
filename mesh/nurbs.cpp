@@ -189,14 +189,18 @@ int KnotVector::GetUniqueSpan(real_t u) const
 {
    real_t low, high;
    low = GetUniqueKnot(0);
-   for (int i = 1; i < NumOfElements; i++)
+   for (int i = 1; i < NumOfElements+1; i++)
    {
       high = GetUniqueKnot(i);
       if (u >= low && u < high)
       {
-         return i;
+         return i-1;
       }
       low = high;
+   }
+   if (u == high)
+   {
+      return NumOfElements-1;
    }
 
    mfem_error("Knot location outside of the range of the KnotVector");
