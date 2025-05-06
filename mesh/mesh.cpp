@@ -6155,9 +6155,6 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
    constexpr int dim = 2;              // topological dimension
    const int sdim = spaceDim;          // dimension of physical space
    const int NP = NURBSext->GetNP();   // number of patches
-   // HO patches
-   // Array<NURBSPatch *> ho_patches(NP);
-   // GetNURBSPatches(ho_patches);
    // LO patches and knot vectors
    Array<NURBSPatch*> lo_patches(NP);
    // std::vector<Array<const KnotVector*>> lo_kvs(NP);
@@ -6168,9 +6165,10 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
    int px, py;       // order of spline bases
 
    IntegrationPoint ip;
-   Vector vals;
+   Vector vals(sdim);
 
    // Loop over patches
+   int offset = 0;
    for (int p = 0; p < NP; p++)
    {
       // lo_kvs[p].SetSize(dim);
@@ -6182,11 +6180,13 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
       Array<int> ncp(dim);
       Array<int> nel(dim);
       int data_size = sdim+1;
+      int patch_nel = 1;
       for (int d = 0; d < dim; d++)
       {
          ncp[d] = ho_kvs[d]->GetNCP();
          nel[d] = ho_kvs[d]->GetNE();
          data_size *= ncp[d];
+         patch_nel *= nel[d];
 
          // For each HO knotvector, construct the LO knotvector
          // Greville/Botella/etc points are the LO knots
@@ -6209,14 +6209,12 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
 
       for (int j = 0; j < ncp[1]; j++)
       {
-         cout << "j = " << j << endl;
          // Get reference coordinate in HO element (y)
          uy = kv1[j+1]; // +1 because of repeated knot at start
          ey = hkv1.GetSpan(uy) - py;
          y = hkv1.GetRefPoint(uy, ey + py);
          for (int i = 0; i < ncp[0]; i++)
          {
-            cout << "i = " << j << endl;
             // Get reference coordinate in HO element (x)
             ux = kv0[i+1];
             ex = hkv0.GetSpan(ux) - px;
@@ -6224,39 +6222,38 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
 
             // Get the value of the HO B-NET at (x,y)
             ip.Set2(x,y);
-            Nodes->GetVectorValue(ex+ey*nel[0], ip, vals);
-            cout << "ux, uy = " << ux << ", " << uy << endl;
-            cout << "  x, y = (" << vals[0] << ", " << vals[1] << ")" << endl;
+            Nodes->GetVectorValue(offset+ex+ey*nel[0], ip, vals);
+            cout << "[element " << ex+ey*nel[0] << "]";
+            cout << "  u=(" << ux << ", " << uy << ")";
+            cout << "  x=(" << x << ", " << y << ")";
+            cout << "  c=(" << vals[0] << ", " << vals[1] << ")" << endl;
 
-            // Set the control points for the LO mesh
-            control_points[3*(i + j*ncp[0])] = vals[0];
-            control_points[3*(i + j*ncp[0]) + 1] = vals[1];
-            control_points[3*(i + j*ncp[0]) + 2] = 1.0;
+            // Set the control points (+ weight) for the LO mesh
+            for (int sd = 0; sd < sdim; sd++)
+            {
+               control_points[3*(i + j*ncp[0]) + sd] = vals[sd];
+            }
+            control_points[3*(i + j*ncp[0]) + sdim] = 1.0;
          }
       }
+      offset += patch_nel;
 
       cout << "control_points :" << endl;
       control_points.Print(mfem::out);
-      // Create new patch (TODO: Use control points here)
-      cout << "a" << endl;
-      // lo_patches[p] = new NURBSPatch(lo_kvs[p], Dim+1);
-      lo_patches[p] = new NURBSPatch(lo_kvs, dim+1, control_points.GetData());
-      cout << "b" << endl;
+      // Create new patch
+      lo_patches[p] = new NURBSPatch(lo_kvs, sdim+1, control_points.GetData());
    }
 
    // Create new NURBSExt
-   cout << "c" << endl;
    NURBSExtension ext(
       NURBSext->GetPatchTopology(),
       lo_patches);
-   cout << "d" << endl;
 
    // Now set control points
    cout << "Nodes =" << endl;
    Nodes->Print(mfem::out);
    cout << endl;
 
-   cout << "e" << endl;
    // testing
    // Array<real_t> data;
    // ho_patches[0]->GetData(data);
@@ -6265,9 +6262,7 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
 
    Mesh lo_mesh(ext);
    // Mesh lo_mesh(*this, true);
-   cout << "f" << endl;
    // lo_mesh.NURBSext
-   cout << "g" << endl;
    return lo_mesh;
 }
 
