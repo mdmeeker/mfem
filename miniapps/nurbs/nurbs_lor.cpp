@@ -93,89 +93,89 @@ int main(int argc, char *argv[])
       mesh.NURBSUniformRefinement();
    }
 
-   // 5. Define a finite element space on the mesh.
-   // Node ordering is important - right now, only works with byVDIM
-   FiniteElementCollection * fec = mesh.GetNodes()->OwnFEC();
-   cout << "fec order = " << fec->GetOrder() << endl;
+   // // 5. Define a finite element space on the mesh.
+   // // Node ordering is important - right now, only works with byVDIM
+   // FiniteElementCollection * fec = mesh.GetNodes()->OwnFEC();
+   // cout << "fec order = " << fec->GetOrder() << endl;
 
-   FiniteElementSpace *fespace = new FiniteElementSpace(&mesh, mesh.NURBSext, fec);
-   cout << "Finite Element Collection: " << fec->Name() << endl;
-   const int Ndof = fespace->GetTrueVSize();
-   cout << "Number of finite element unknowns: " << Ndof << endl;
-   cout << "Number of elements: " << fespace->GetNE() << endl;
-   cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
+   // FiniteElementSpace *fespace = new FiniteElementSpace(&mesh, mesh.NURBSext, fec);
+   // cout << "Finite Element Collection: " << fec->Name() << endl;
+   // const int Ndof = fespace->GetTrueVSize();
+   // cout << "Number of finite element unknowns: " << Ndof << endl;
+   // cout << "Number of elements: " << fespace->GetNE() << endl;
+   // cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
 
-   // 6. Determine the list of true (i.e. conforming) essential boundary dofs.
-   Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
-   ess_bdr = 1;
-   fespace->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+   // // 6. Determine the list of true (i.e. conforming) essential boundary dofs.
+   // Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
+   // ess_bdr = 1;
+   // fespace->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
 
-   // 7. Set up the linear form b(.)
-   LinearForm b(fespace);
-   ConstantCoefficient one(1.0);
-   b.AddDomainIntegrator(new DomainLFIntegrator(one));
-   cout << "Assembling RHS ... " << flush;
-   b.Assemble();
-   cout << "done." << endl;
+   // // 7. Set up the linear form b(.)
+   // LinearForm b(fespace);
+   // ConstantCoefficient one(1.0);
+   // b.AddDomainIntegrator(new DomainLFIntegrator(one));
+   // cout << "Assembling RHS ... " << flush;
+   // b.Assemble();
+   // cout << "done." << endl;
 
-   // 8. Define the solution vector x as a finite element grid function
-   GridFunction x(fespace);
-   x = 0.0;
+   // // 8. Define the solution vector x as a finite element grid function
+   // GridFunction x(fespace);
+   // x = 0.0;
 
-   // 9. Set up the bilinear form a(.,.)
-   DiffusionIntegrator *di = new DiffusionIntegrator(one);
+   // // 9. Set up the bilinear form a(.,.)
+   // DiffusionIntegrator *di = new DiffusionIntegrator(one);
 
-   if (patchAssembly)
-   {
-      di->SetIntegrationMode(NonlinearFormIntegrator::Mode::PATCHWISE);
-      SetPatchIntegrationRules(mesh, SplineIntegrationRule::FULL_GAUSSIAN, di);
-   }
+   // if (patchAssembly)
+   // {
+   //    di->SetIntegrationMode(NonlinearFormIntegrator::Mode::PATCHWISE);
+   //    SetPatchIntegrationRules(mesh, SplineIntegrationRule::FULL_GAUSSIAN, di);
+   // }
 
-   // 10. Assembly
-   // StopWatch sw;
-   // sw.Start();
+   // // 10. Assembly
+   // // StopWatch sw;
+   // // sw.Start();
 
-   // Define and assemble bilinear form
-   cout << "Assembling a ... " << flush;
-   BilinearForm a(fespace);
-   if (pa) { a.SetAssemblyLevel(AssemblyLevel::PARTIAL); }
-   a.AddDomainIntegrator(di);
-   a.Assemble();
-   cout << "done." << endl;
+   // // Define and assemble bilinear form
+   // cout << "Assembling a ... " << flush;
+   // BilinearForm a(fespace);
+   // if (pa) { a.SetAssemblyLevel(AssemblyLevel::PARTIAL); }
+   // a.AddDomainIntegrator(di);
+   // a.Assemble();
+   // cout << "done." << endl;
 
-   // Form linear system
-   cout << "Forming linear system ... " << flush;
-   OperatorPtr A;
-   Vector B, X;
-   a.FormLinearSystem(ess_tdof_list, x, b, A, X, B);
-   cout << "done. " << "(size = " << fespace->GetTrueVSize() << ")" << endl;
+   // // Form linear system
+   // cout << "Forming linear system ... " << flush;
+   // OperatorPtr A;
+   // Vector B, X;
+   // a.FormLinearSystem(ess_tdof_list, x, b, A, X, B);
+   // cout << "done. " << "(size = " << fespace->GetTrueVSize() << ")" << endl;
 
-   // 11. Get the preconditioner
-   // We define solver here because SetOperator needs to be used before
-   // SetPreconditioner *if* we are using hypre
-   CGSolver solver(MPI_COMM_WORLD);
-   solver.SetOperator(*A);
+   // // 11. Get the preconditioner
+   // // We define solver here because SetOperator needs to be used before
+   // // SetPreconditioner *if* we are using hypre
+   // CGSolver solver(MPI_COMM_WORLD);
+   // solver.SetOperator(*A);
 
-   // Get patches
-   Array<const KnotVector*> kvs(dim);
-   mesh.NURBSext->GetPatchKnotVectors(0, kvs);
+   // // Get patches
+   // Array<const KnotVector*> kvs(dim);
+   // mesh.NURBSext->GetPatchKnotVectors(0, kvs);
 
-   // Get greville points
-   const KnotVector* kv = kvs[0];
+   // // Get greville points
+   // const KnotVector* kv = kvs[0];
 
-   Vector greville(kv->GetNCP());
-   for (int i = 0; i < kv->GetNCP(); i++) { greville[i] = kv->GetGreville(i); }
+   // Vector greville(kv->GetNCP());
+   // for (int i = 0; i < kv->GetNCP(); i++) { greville[i] = kv->GetGreville(i); }
 
-   // Print
-   cout << "Knots : "; kv->Print(mfem::out);
-   cout << "Greville points : "; greville.Print(mfem::out, 32);
+   // // Print
+   // cout << "Knots : "; kv->Print(mfem::out);
+   // cout << "Greville points : "; greville.Print(mfem::out, 32);
 
-   KnotVector* kvg = kv->Linearize();
-   cout << "LO Knots (grv) : "; kvg->Print(mfem::out);
+   // KnotVector* kvg = kv->Linearize();
+   // cout << "LO Knots (grv) : "; kvg->Print(mfem::out);
 
-   KnotVector* kvb = kv->Linearize(SplineProjectionType::Botella);
-   cout << "LO Knots (bot): "; kvb->Print(mfem::out);
+   // KnotVector* kvb = kv->Linearize(SplineProjectionType::Botella);
+   // cout << "LO Knots (bot): "; kvb->Print(mfem::out);
 
    // Create the LOR mesh
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);

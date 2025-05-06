@@ -1115,10 +1115,6 @@ NURBSPatch::NURBSPatch(const NURBSPatch &orig)
    data = new real_t[data_size];
    std::memcpy(data, orig.data, data_size*sizeof(real_t));
 
-   mfem::out << "Debug NURBSPatch copy constructor" << endl;
-   mfem::out << "orig.data[5] = " << orig.data[5] << endl;
-   mfem::out << "data[5] = " << data[5] << endl;
-
    // Copy the knot vectors:
    for (int i = 0; i < kv.Size(); i++)
    {

@@ -4633,44 +4633,29 @@ Mesh::Mesh( const NURBSExtension& ext )
 {
    SetEmpty();
    /// make an internal copy of the NURBSExtension
-   cout << "mesh 1" << endl;
    NURBSext = new NURBSExtension( ext );
-   cout << "mesh 2" << endl;
 
    Dim              = NURBSext->Dimension();
    NumOfVertices    = NURBSext->GetNV();
    NumOfElements    = NURBSext->GetNE();
    NumOfBdrElements = NURBSext->GetNBE();
 
-   cout << "Dim = " << Dim << endl;
-   cout << "mesh 3" << endl;
    NURBSext->GetElementTopo(elements);
    NURBSext->GetBdrElementTopo(boundary);
-   cout << "mesh 4" << endl;
-
    vertices.SetSize(NumOfVertices);
-   cout << "mesh 5" << endl;
+
    if (NURBSext->HavePatches())
    {
-      cout << "mesh 6a" << endl;
       NURBSFECollection  *fec = new NURBSFECollection(NURBSext->GetOrder());
-      cout << "mesh 6b" << endl;
       FiniteElementSpace *fes = new FiniteElementSpace(this, fec, Dim,
                                                        Ordering::byVDIM);
-      cout << "mesh 6c" << endl;
       Nodes = new GridFunction(fes);
-      cout << "mesh 6d" << endl;
       Nodes->MakeOwner(fec);
-      cout << "mesh 6e" << endl;
       NURBSext->SetCoordsFromPatches(*Nodes);
-      cout << "mesh 6f" << endl;
+      spaceDim = Nodes->VectorDim();
       own_nodes = 1;
-      // spaceDim = Nodes->VectorDim(); // fails?
-      spaceDim = Dim;
-      cout << "mesh 6g" << endl;
       for (int i = 0; i < spaceDim; i++)
       {
-         cout << "mesh 6h, i=" << i << endl;
          Vector vert_val;
          Nodes->GetNodalValues(vert_val, i+1);
          for (int j = 0; j < NumOfVertices; j++)
@@ -4683,9 +4668,7 @@ Mesh::Mesh( const NURBSExtension& ext )
    {
       MFEM_ABORT("NURBS mesh has no patches.");
    }
-   cout << "mesh 7" << endl;
    FinalizeMesh();
-   cout << "mesh 8" << endl;
 }
 
 Element *Mesh::NewElement(int geom)
@@ -6159,6 +6142,11 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
    const int pdim = sdim + 1;             // projective/homogeneous dimension
    const int NP = NURBSext->GetNP();      // number of patches
 
+   // Debugging
+   cout << "dim = " << dim << endl;
+   cout << "sdim = " << sdim << endl;
+
+
    MFEM_VERIFY(dim >= 1 && dim <= 3,
                "GetLowOrderNURBSMesh: topological dim out of range");
 
@@ -6200,18 +6188,18 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
          lo_kvs[d] = ho_kvs[d]->Linearize(projection_type);
 
          // Debugging
-         cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);
-         cout << "lo_kv[" << d << "]= "; lo_kvs[d]->Print(cout);
+         // cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);
+         // cout << "lo_kv[" << d << "]= "; lo_kvs[d]->Print(cout);
       }
 
       // Debugging
-      cout << "Patch " << p << ": " << endl;
-      cout << "  nel = " << nel[0] << " x " << nel[1] << endl;
-      cout << "  ncp = " << ncp[0] << " x " << ncp[1] << endl;
+      // cout << "Patch " << p << ": " << endl;
+      // cout << "  nel = " << nel[0] << " x " << nel[1] << endl;
+      // cout << "  ncp = " << ncp[0] << " x " << ncp[1] << endl;
 
       Array<real_t> control_points((pdim) * ncp.Prod());
       // Debugging
-      cout << "control_points size: " << control_points.Size() << endl;
+      // cout << "control_points size: " << control_points.Size() << endl;
 
       // Compute and store the reference coordinates
       for (int d = 0; d < maxdim; d++)
@@ -6254,14 +6242,14 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
                Nodes->GetVectorValue(eidx, ip, vals);
 
                // Debugging
-               cout << "[element " << setw(2) << eidx << "]";
-               cout << "  e=(" << setw(2) << el[0][i] << " , "
-                               << setw(2) << el[1][j] << ")";
+               // cout << "[element " << setw(2) << eidx << "]";
+               // cout << "  e=(" << setw(2) << el[0][i] << " , "
+                              //  << setw(2) << el[1][j] << ")";
                // cout << "  u=(" << setw(4) << el[0][i] << " , "
                               //  << setw(4) << el[1][j] << ")";
-               cout << "  x=(" << setw(4) << x[0][i]  << " , "
-                               << setw(4) << x[1][j] << ")";
-               cout << "  c=(" << setw(4) << vals[0] << " , " << setw(4) << vals[1] << ")" << endl;
+               // cout << "  x=(" << setw(4) << x[0][i]  << " , "
+                              //  << setw(4) << x[1][j] << ")";
+               // cout << "  c=(" << setw(4) << vals[0] << " , " << setw(4) << vals[1] << ")" << endl;
 
                // Set the control points (+ weight) for the LO mesh
                for (int sd = 0; sd < sdim; sd++)
@@ -6274,9 +6262,9 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
       }
       eidx_offset += nel.Prod();
       // Debugging
-      cout << "offset = " << eidx_offset << endl;
-      cout << "control_points :" << endl;
-      control_points.Print(mfem::out);
+      // cout << "offset = " << eidx_offset << endl;
+      // cout << "control_points :" << endl;
+      // control_points.Print(mfem::out);
       // Create low-order patch
       lo_patches[p] = new NURBSPatch(lo_kvs, pdim, control_points.GetData());
    }
@@ -6287,9 +6275,9 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
       lo_patches);
 
    // Debugging
-   cout << "Nodes =" << endl;
-   Nodes->Print(mfem::out);
-   cout << endl;
+   // cout << "Nodes =" << endl;
+   // Nodes->Print(mfem::out);
+   // cout << endl;
 
    return Mesh(ext);
 }
