@@ -6151,20 +6151,21 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
 
-   cout << "Creating low order mesh..." << endl;
-
    // Initialize
-   const int dim = 2;
-   const int NP = NURBSext->GetNP();
+   constexpr int dim = 2;              // topological dimension
+   const int sdim = spaceDim;          // dimension of physical space
+   const int NP = NURBSext->GetNP();   // number of patches
+   // HO patches
+   // Array<NURBSPatch *> ho_patches(NP);
+   // GetNURBSPatches(ho_patches);
+   // LO patches and knot vectors
    Array<NURBSPatch*> lo_patches(NP);
-   // lo_mesh.GetNURBSPatches(ho_patches);
-   // Array<const NURBSPatch*> lo_patches(ho_patches.Size());
-   std::vector<Array<const KnotVector*>> lo_kvs(NP);
+   // std::vector<Array<const KnotVector*>> lo_kvs(NP);
 
    real_t ux, uy;    // knot values
    int ex, ey;       // element (knot span) indices
    real_t x, y;      // reference coordinates
-   int px, py;       // orders
+   int px, py;       // order of spline bases
 
    IntegrationPoint ip;
    Vector vals;
@@ -6172,59 +6173,76 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
    // Loop over patches
    for (int p = 0; p < NP; p++)
    {
-      lo_kvs[p].SetSize(dim);
+      // lo_kvs[p].SetSize(dim);
       Array<const KnotVector*> ho_kvs(dim);
+      Array<const KnotVector*> lo_kvs(dim);
       NURBSext->GetPatchKnotVectors(p, ho_kvs);
 
+      // Initialize
       Array<int> ncp(dim);
-      for (int d = 0; d < Dim; d++) { ncp[d] = ho_kvs[d]->GetNCP(); }
-      cout << "NCP: " << endl; ncp.Print();
       Array<int> nel(dim);
-      for (int d = 0; d < Dim; d++) { nel[d] = ho_kvs[d]->GetNE(); }
-      cout << "NEL: " << endl; nel.Print();
-
-      // For each HO knotvector, construct the LO knotvector
-      for (int d = 0; d < Dim; d++)
+      int data_size = sdim+1;
+      for (int d = 0; d < dim; d++)
       {
-         // Greville/Botella/etc points are the LO knots
-         lo_kvs[p][d] = ho_kvs[d]->Linearize(SplineProjectionType::Greville);
+         ncp[d] = ho_kvs[d]->GetNCP();
+         nel[d] = ho_kvs[d]->GetNE();
+         data_size *= ncp[d];
 
+         // For each HO knotvector, construct the LO knotvector
+         // Greville/Botella/etc points are the LO knots
+         lo_kvs[d] = ho_kvs[d]->Linearize(SplineProjectionType::Greville);
          // sanity check
          cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);
-         cout << "lo_kv[" << d << "]= "; lo_kvs[p][d]->Print(cout);
+         cout << "lo_kv[" << d << "]= "; lo_kvs[d]->Print(cout);
       }
 
       // Evaluate HO B-NET to get LO control points
-      const KnotVector kv0 = *lo_kvs[p][0];
-      const KnotVector kv1 = *lo_kvs[p][1];
+      const KnotVector kv0 = *lo_kvs[0];
+      const KnotVector kv1 = *lo_kvs[1];
       const KnotVector hkv0 = *ho_kvs[0];
       const KnotVector hkv1 = *ho_kvs[1];
       px = hkv0.GetOrder();
       py = hkv1.GetOrder();
 
-      for (int i = 1; i < ncp[0]+1; i++)
+      Array<real_t> control_points(data_size);
+      cout << "control_points size: " << control_points.Size() << endl;
+
+      for (int j = 0; j < ncp[1]; j++)
       {
-         ux = kv0[i];
-         ex = hkv0.GetSpan(ux) - px;
-         x = hkv0.GetRefPoint(ux, ex + px);
-         for (int j = 1; j < ncp[1]+1; j++)
+         cout << "j = " << j << endl;
+         // Get reference coordinate in HO element (y)
+         uy = kv1[j+1]; // +1 because of repeated knot at start
+         ey = hkv1.GetSpan(uy) - py;
+         y = hkv1.GetRefPoint(uy, ey + py);
+         for (int i = 0; i < ncp[0]; i++)
          {
-            uy = kv1[j];
-            ey = hkv1.GetSpan(uy) - py;
-            y = hkv1.GetRefPoint(uy, ey + py);
+            cout << "i = " << j << endl;
+            // Get reference coordinate in HO element (x)
+            ux = kv0[i+1];
+            ex = hkv0.GetSpan(ux) - px;
+            x = hkv0.GetRefPoint(ux, ex + px);
+
+            // Get the value of the HO B-NET at (x,y)
             ip.Set2(x,y);
             Nodes->GetVectorValue(ex+ey*nel[0], ip, vals);
             cout << "ux, uy = " << ux << ", " << uy << endl;
             cout << "  x, y = (" << vals[0] << ", " << vals[1] << ")" << endl;
+
+            // Set the control points for the LO mesh
+            control_points[3*(i + j*ncp[0])] = vals[0];
+            control_points[3*(i + j*ncp[0]) + 1] = vals[1];
+            control_points[3*(i + j*ncp[0]) + 2] = 1.0;
          }
       }
 
+      cout << "control_points :" << endl;
+      control_points.Print(mfem::out);
       // Create new patch (TODO: Use control points here)
       cout << "a" << endl;
-      lo_patches[p] = new NURBSPatch(lo_kvs[p], Dim+1);
+      // lo_patches[p] = new NURBSPatch(lo_kvs[p], Dim+1);
+      lo_patches[p] = new NURBSPatch(lo_kvs, dim+1, control_points.GetData());
       cout << "b" << endl;
    }
-
 
    // Create new NURBSExt
    cout << "c" << endl;
@@ -6234,25 +6252,16 @@ Mesh Mesh::GetLowOrderNURBSMesh2D()
    cout << "d" << endl;
 
    // Now set control points
-   // TODO - Interpolate to proper values
    cout << "Nodes =" << endl;
    Nodes->Print(mfem::out);
    cout << endl;
-   cout << "Nodes.VectorDim =" << Nodes->VectorDim() << endl;
 
-   // TODO - this isn't working so well, try set control points manually
-   Array<NURBSPatch *> ho_patches(NP);
-   GetNURBSPatches(ho_patches);
-   ho_patches[0]->GetKV(0)->Print(mfem::out);
-   // ext.ConvertToPatches(*Nodes);
-   // const NURBSPatch* P = ext.GetPatch(0);
    cout << "e" << endl;
    // testing
-   // const real_t* data = ext.GetPatch(0)->GetData();
-   Array<real_t> data;
-   ho_patches[0]->GetData(data);
-   cout << "data :" << endl;
-   data.Print(mfem::out);
+   // Array<real_t> data;
+   // ho_patches[0]->GetData(data);
+   // cout << "data :" << endl;
+   // data.Print(mfem::out);
 
    Mesh lo_mesh(ext);
    // Mesh lo_mesh(*this, true);

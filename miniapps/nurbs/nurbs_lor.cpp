@@ -177,6 +177,10 @@ int main(int argc, char *argv[])
    // Modify patches?
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh2D();
 
+   ofstream ofs("lo_mesh.mesh");
+   ofs.precision(8);
+   lo_mesh.Print(ofs);
+
    return 0;
 }
 

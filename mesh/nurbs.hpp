@@ -1036,7 +1036,7 @@ public:
    void GetPatchDofs(const int patch, Array<int> &dofs);
 
    /// Return NURBSPatch object
-   NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
+   const NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
 
    /// Return patch topology
    const Mesh* GetPatchTopology() const { return patchTopo; }
