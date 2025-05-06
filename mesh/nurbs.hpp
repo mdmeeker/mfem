@@ -29,13 +29,6 @@ namespace mfem
 
 class GridFunction;
 
-enum class SplineProjectionType
-{
-   Greville,
-   Botella,
-   Demko,
-};
-
 /** @brief A vector of knots in one dimension, with B-spline basis functions of
     a prescribed order.
 

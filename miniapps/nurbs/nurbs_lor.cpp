@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
    bool patchAssembly = false;
    int ref_levels = 0;
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
+   int projection_type = 0;
    int preconditioner = 0;
    int visport = 19916;
    bool visualization = 1;
@@ -53,6 +54,8 @@ int main(int argc, char *argv[])
                   "Number of uniform mesh refinements.");
    args.AddOption(&nurbs_degree_increase, "-incdeg", "--nurbs-degree-increase",
                   "Elevate NURBS mesh degree by this amount.");
+   args.AddOption(&projection_type, "-proj", "--projection",
+                  "Projection Type: 0 - Greville, 1 - Botella, 2 - Demko");
    args.AddOption(&preconditioner, "-pc", "--preconditioner",
                   "Preconditioner: 0 - none, 1 - diagonal, 2 - LOR AMG");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
@@ -68,6 +71,7 @@ int main(int argc, char *argv[])
       MFEM_VERIFY(nurbs_degree_increase > 0,
                   "LOR preconditioner requires degree increase");
    }
+   SplineProjectionType sptype = static_cast<SplineProjectionType>(projection_type);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
@@ -174,8 +178,7 @@ int main(int argc, char *argv[])
    cout << "LO Knots (bot): "; kvb->Print(mfem::out);
 
    // Create the LOR mesh
-   // Modify patches?
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh2D();
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
 
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
