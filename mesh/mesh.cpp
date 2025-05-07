@@ -6130,7 +6130,7 @@ void Mesh::UpdateNURBS()
    GenerateFaces();
 }
 
-Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type)
+Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
 
@@ -6141,10 +6141,6 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type)
    const int sdim = spaceDim;             // (physical) spatial dimension
    const int pdim = sdim + 1;             // projective/homogeneous dimension
    const int NP = NURBSext->GetNP();      // number of patches
-
-   // Debugging
-   cout << "dim = " << dim << endl;
-   cout << "sdim = " << sdim << endl;
 
    MFEM_VERIFY(dim >= 1 && dim <= 3,
                "GetLowOrderNURBSMesh: topological dim out of range");
@@ -6184,7 +6180,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type)
 
          // For each HO knotvector, construct its corresponding LO knotvector
          // Greville/Botella/etc points are the LO knots
-         lo_kvs[d] = ho_kvs[d]->Linearize(projection_type);
+         lo_kvs[d] = ho_kvs[d]->Linearize(interp_rule);
 
          // Debugging
          // cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);

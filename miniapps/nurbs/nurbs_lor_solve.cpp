@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
    bool patchAssembly = false;
    int ref_levels = 0;
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
-   int projection_type = 0;
+   int interp_rule = 0;
    int preconditioner = 0;
    int visport = 19916;
    bool visualization = 1;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
                   "Number of uniform mesh refinements.");
    args.AddOption(&nurbs_degree_increase, "-incdeg", "--nurbs-degree-increase",
                   "Elevate NURBS mesh degree by this amount.");
-   args.AddOption(&projection_type, "-proj", "--projection",
+   args.AddOption(&interp_rule, "-proj", "--projection",
                   "Projection Type: 0 - Greville, 1 - Botella, 2 - Demko");
    args.AddOption(&preconditioner, "-pc", "--preconditioner",
                   "Preconditioner: 0 - none, 1 - diagonal, 2 - LOR AMG");
@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
       MFEM_VERIFY(nurbs_degree_increase > 0,
                   "LOR preconditioner requires degree increase");
    }
-   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(projection_type);
+   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(interp_rule);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);

@@ -67,6 +67,9 @@ protected:
    /// Compute unique knots and their multiplicities.
    void ComputeUniqueKnots() const;
 
+   /// Dispatcher for different rules
+   Vector GetInterpolationPoints(NURBSInterpolationRule interp_rule) const;
+
 public:
    /// Create an empty KnotVector.
    KnotVector() { }
@@ -233,6 +236,10 @@ public:
       GetGreville. The Demko points might be most appropriate.*/
    void GetInterpolant(const Vector &x, const Vector &u, Vector &a) const;
 
+   void GetInterpolant(const Vector &x, const NURBSInterpolationRule interp_rule,
+                       Vector &a) const
+   { GetInterpolant(x, GetInterpolationPoints(interp_rule), a); }
+
    /** Set @a diff, comprised of knots in @a kv not contained in this KnotVector.
        @a kv must be of the same order as this KnotVector. The current
        implementation is not well defined, and the function may have undefined
@@ -264,7 +271,8 @@ public:
        are located at points determined by NURBSInterpolationRule (e.g.
        Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
-   KnotVector *Linearize(NURBSInterpolationRule projection_type=NURBSInterpolationRule::Greville) const;
+   KnotVector *Linearize(NURBSInterpolationRule interp_rule =
+                         NURBSInterpolationRule::Greville) const;
 
    real_t GetUniqueKnot(int i) const;
 
@@ -452,7 +460,7 @@ public:
        are located at points determined by NURBSInterpolationRule (e.g.
        Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
-   // NURBSPatch *Linearize(NURBSInterpolationRule projection_type=NURBSInterpolationRule::Greville) const;
+   // NURBSPatch *Linearize(NURBSInterpolationRule interp_rule=NURBSInterpolationRule::Greville) const;
 
    /** @brief Refine with optional refinement factor @a rf. Uniform means
        refinement is done everywhere by the same factor, although nonuniform

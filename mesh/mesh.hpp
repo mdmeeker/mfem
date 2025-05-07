@@ -45,12 +45,13 @@ class FiniteElementSpace;
 class GridFunction;
 struct Refinement;
 
-//** An enum type to specify the type of projection for a spline basis */
+//** An enum type to specify the type of interpolation to use for a NURBS basis */
 enum class NURBSInterpolationRule
 {
    Greville,
    Botella,
    Demko,
+   Uniform,
 };
 
 /** An enum type to specify if interior or boundary faces are desired. */
@@ -2445,7 +2446,7 @@ public:
    void DegreeElevate(int rel_degree, int degree = 16);
    ///@}
 
-   Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type =
+   Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule =
                              NURBSInterpolationRule::Greville);
 
    /// @name Print/Save/Export methods

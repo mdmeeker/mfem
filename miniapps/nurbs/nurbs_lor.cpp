@@ -5,8 +5,8 @@
 // Sample runs:  nurbs_lor -ref 2 -incdeg 3
 //
 // Description:  This example code generates a LOR NURBS mesh using an interpolant
-//               defined by projection_type.
-//               Projection types (-proj):
+//               defined by interp_rule.
+//               Interpolation rules (-interp):
 //                 - 0: Greville points (default)
 //                 - 1: Botella points
 //                 - 2: Demko points
@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
    const char *mesh_file = "../../data/square-nurbs.mesh";
    int ref_levels = 0;
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
-   int projection_type = 0;
+   int interp_rule = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -37,13 +37,13 @@ int main(int argc, char *argv[])
                   "Number of uniform mesh refinements.");
    args.AddOption(&nurbs_degree_increase, "-incdeg", "--nurbs-degree-increase",
                   "Elevate NURBS mesh degree by this amount.");
-   args.AddOption(&projection_type, "-proj", "--projection",
-                  "Projection Type: 0 - Greville, 1 - Botella, 2 - Demko");
+   args.AddOption(&interp_rule, "-interp", "--interpolation-rule",
+                  "Interpolation Rule: 0 - Greville, 1 - Botella, 2 - Demko");
    args.Parse();
 
    // Print & verify options
    args.PrintOptions(cout);
-   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(projection_type);
+   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(interp_rule);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);

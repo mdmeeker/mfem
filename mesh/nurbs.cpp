@@ -386,36 +386,47 @@ KnotVector *KnotVector::DegreeElevate(int t) const
    return newkv;
 }
 
-KnotVector *KnotVector::Linearize(NURBSInterpolationRule projection_type) const
+Vector KnotVector::GetInterpolationPoints(NURBSInterpolationRule interp_rule) const
+{
+   // Define the function that gets the interpolation points
+   std::function<real_t(int)> GetPoints;
+   switch (interp_rule)
+   {
+      case NURBSInterpolationRule::Greville:
+         GetPoints = [&](int i) -> real_t { return GetGreville(i); };
+         break;
+      case NURBSInterpolationRule::Botella:
+         GetPoints = [&](int i) -> real_t { return GetBotella(i); };
+         break;
+      case NURBSInterpolationRule::Demko:
+         ComputeDemko(); // this computes then caches the points
+         GetPoints = [&](int i) -> real_t { return demko[i]; };
+         break;
+      case NURBSInterpolationRule::Uniform:
+      {
+         const real_t h = (knot[NumOfControlPoints+Order]-knot[0]) /
+                          (NumOfControlPoints - 1);
+         GetPoints = [h](int i) -> real_t { return i*h; };
+         break;
+      }
+      default:
+         mfem_error("Unknown NURBS interpolation rule");
+   }
+
+   // Get the interpolation points using the rule
+   Vector u(NumOfControlPoints);
+   for (int i = 0; i < NumOfControlPoints; i++)
+   {
+      u[i] = GetPoints(i);
+   }
+   return u;
+}
+
+KnotVector *KnotVector::Linearize(NURBSInterpolationRule interp_rule) const
 {
    MFEM_VERIFY(Order >= 1, "Order must be at least 1 to linearize.");
 
-   // Set the method for computing the new knots
-   std::function<real_t(int)> GetPoints;
-   if ( projection_type == NURBSInterpolationRule::Greville )
-   {
-      GetPoints = [&](int i) -> real_t { return GetGreville(i); };
-   }
-   else if ( projection_type == NURBSInterpolationRule::Botella )
-   {
-      GetPoints = [&](int i) -> real_t { return GetBotella(i); };
-   }
-   else if ( projection_type == NURBSInterpolationRule::Demko )
-   {
-      ComputeDemko();
-      GetPoints = [&](int i) -> real_t { return demko[i]; };
-   }
-   else
-   {
-      mfem_error("Unknown spline projection type");
-   }
-
-   // Get the new knots
-   Vector newknots(NumOfControlPoints);
-   for (int i = 0; i < NumOfControlPoints; i++)
-   {
-      newknots[i] = GetPoints(i);
-   }
+   Vector newknots = GetInterpolationPoints(interp_rule);
 
    // Return the new knot vector
    KnotVector *newkv = new KnotVector(1, newknots);
@@ -4625,7 +4636,6 @@ void NURBSExtension::ConvertToPatches(const Vector &Nodes)
    delete el_dof;
    delete bel_dof;
 
-   cout << "patches.size = " << patches.Size() << endl;
    if (patches.Size() == 0)
    {
       GetPatchNets(Nodes, Dimension());
