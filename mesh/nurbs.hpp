@@ -261,10 +261,10 @@ public:
 
    /** @brief Return a new KnotVector with degree one and (p-1) additional
        knots (number of control points is unchanged). The new knots are
-       are located at points determined by SplineProjectionType (e.g.
+       are located at points determined by NURBSInterpolationRule (e.g.
        Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
-   KnotVector *Linearize(SplineProjectionType projection_type=SplineProjectionType::Greville) const;
+   KnotVector *Linearize(NURBSInterpolationRule projection_type=NURBSInterpolationRule::Greville) const;
 
    real_t GetUniqueKnot(int i) const;
 
@@ -449,10 +449,10 @@ public:
 
    /** @brief Return a new NURBSPatch with degree one in each dimension
        and (number of control points is unchanged). The new knots are
-       are located at points determined by SplineProjectionType (e.g.
+       are located at points determined by NURBSInterpolationRule (e.g.
        Greville, Botella, Demko) applied to the original KnotVector. */
    /// @note The returned object should be deleted by the caller.
-   // NURBSPatch *Linearize(SplineProjectionType projection_type=SplineProjectionType::Greville) const;
+   // NURBSPatch *Linearize(NURBSInterpolationRule projection_type=NURBSInterpolationRule::Greville) const;
 
    /** @brief Refine with optional refinement factor @a rf. Uniform means
        refinement is done everywhere by the same factor, although nonuniform

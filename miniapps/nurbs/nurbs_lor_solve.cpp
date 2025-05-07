@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
       MFEM_VERIFY(nurbs_degree_increase > 0,
                   "LOR preconditioner requires degree increase");
    }
-   SplineProjectionType sptype = static_cast<SplineProjectionType>(projection_type);
+   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(projection_type);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
    // KnotVector* kvg = kv->Linearize();
    // cout << "LO Knots (grv) : "; kvg->Print(mfem::out);
 
-   // KnotVector* kvb = kv->Linearize(SplineProjectionType::Botella);
+   // KnotVector* kvb = kv->Linearize(NURBSInterpolationRule::Botella);
    // cout << "LO Knots (bot): "; kvb->Print(mfem::out);
 
    // Create the LOR mesh

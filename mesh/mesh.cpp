@@ -6130,7 +6130,7 @@ void Mesh::UpdateNURBS()
    GenerateFaces();
 }
 
-Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
+Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type)
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
 
@@ -6145,7 +6145,6 @@ Mesh Mesh::GetLowOrderNURBSMesh(SplineProjectionType projection_type)
    // Debugging
    cout << "dim = " << dim << endl;
    cout << "sdim = " << sdim << endl;
-
 
    MFEM_VERIFY(dim >= 1 && dim <= 3,
                "GetLowOrderNURBSMesh: topological dim out of range");

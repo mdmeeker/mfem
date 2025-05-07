@@ -46,7 +46,7 @@ class GridFunction;
 struct Refinement;
 
 //** An enum type to specify the type of projection for a spline basis */
-enum class SplineProjectionType
+enum class NURBSInterpolationRule
 {
    Greville,
    Botella,
@@ -2445,8 +2445,8 @@ public:
    void DegreeElevate(int rel_degree, int degree = 16);
    ///@}
 
-   Mesh GetLowOrderNURBSMesh(SplineProjectionType projection_type =
-                             SplineProjectionType::Greville);
+   Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule projection_type =
+                             NURBSInterpolationRule::Greville);
 
    /// @name Print/Save/Export methods
    /// @{

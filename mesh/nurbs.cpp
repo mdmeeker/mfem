@@ -386,21 +386,21 @@ KnotVector *KnotVector::DegreeElevate(int t) const
    return newkv;
 }
 
-KnotVector *KnotVector::Linearize(SplineProjectionType projection_type) const
+KnotVector *KnotVector::Linearize(NURBSInterpolationRule projection_type) const
 {
    MFEM_VERIFY(Order >= 1, "Order must be at least 1 to linearize.");
 
    // Set the method for computing the new knots
    std::function<real_t(int)> GetPoints;
-   if ( projection_type == SplineProjectionType::Greville )
+   if ( projection_type == NURBSInterpolationRule::Greville )
    {
       GetPoints = [&](int i) -> real_t { return GetGreville(i); };
    }
-   else if ( projection_type == SplineProjectionType::Botella )
+   else if ( projection_type == NURBSInterpolationRule::Botella )
    {
       GetPoints = [&](int i) -> real_t { return GetBotella(i); };
    }
-   else if ( projection_type == SplineProjectionType::Demko )
+   else if ( projection_type == NURBSInterpolationRule::Demko )
    {
       ComputeDemko();
       GetPoints = [&](int i) -> real_t { return demko[i]; };

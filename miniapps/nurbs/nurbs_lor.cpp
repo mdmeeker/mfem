@@ -1,17 +1,15 @@
-//               Demonstration of generating a NURBS mesh
+//               Demonstration of generating a LOR NURBS mesh
 //
 // Compile with: make nurbs_lor
 //
-// Sample runs:  nurbs_lor -ref 2 -incdeg 3 -pc 1
+// Sample runs:  nurbs_lor -ref 2 -incdeg 3
 //
-// Description:  This example code solves a diffusion problem with
-//               different preconditioners and records some stats.
-//               Preconditioner (-pc) choices:
-//                 - 0: No PC
-//                 - 1: LOR AMG (uniform spacing)
-//                 - 2: LOR AMG (greville abscissa)
-//                 - 3: LOR AMG (botella abscissa)
-//
+// Description:  This example code generates a LOR NURBS mesh using an interpolant
+//               defined by projection_type.
+//               Projection types (-proj):
+//                 - 0: Greville points (default)
+//                 - 1: Botella points
+//                 - 2: Demko points
 
 #include "mfem.hpp"
 #include <iostream>
@@ -45,7 +43,7 @@ int main(int argc, char *argv[])
 
    // Print & verify options
    args.PrintOptions(cout);
-   SplineProjectionType sptype = static_cast<SplineProjectionType>(projection_type);
+   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(projection_type);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
@@ -70,9 +68,15 @@ int main(int argc, char *argv[])
    // Create the LOR mesh
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
 
+   // Write to file
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
    lo_mesh.Print(ofs);
+
+
+   ofstream orig_ofs("mesh.mesh");
+   orig_ofs.precision(8);
+   mesh.Print(orig_ofs);
 
    return 0;
 }
