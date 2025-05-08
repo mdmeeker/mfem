@@ -43,20 +43,20 @@ int main(int argc, char *argv[])
 
    // Print & verify options
    args.PrintOptions(cout);
+   MFEM_ASSERT(dim >= 1 && dim <= 3, "Invalid dimension");
+   MFEM_ASSERT(np >= 1, "Must have at least one patch");
+   MFEM_ASSERT(order >= 1, "Order of nurbs bases must be at least 1");
    NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(interp_rule);
 
-   // default
-   int nx,ny,nz;
-   // set np
-   // for testing
-   nx = np;
-   ny = 1;
-   nz = 1;
-
-   const int NP = nx*ny*nz; // Total number of patches in the mesh
-   const int pdim = dim + 1; // Projective/homogeneous dimension
+   // 1. Parameters
+   int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
+   int ny = (dim >= 2) ? np : 1;
+   int nz = (dim == 3) ? np : 1;
+   const int NP = nx*ny*nz;      // Total number of patches in the mesh
+   const int pdim = dim + 1;     // Projective/homogeneous dimension
 
    // 2. Create the patch-topology mesh
+   //    Default ordering is space-filling-curve, set to false to get Cartesian ordering
    Mesh patchTopo;
    if (dim == 1)
    {
@@ -65,11 +65,19 @@ int main(int argc, char *argv[])
    }
    else if (dim == 2)
    {
-      patchTopo = Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true, (real_t)nx, (real_t)ny);
+      patchTopo = Mesh::MakeCartesian2D
+      (
+         nx, ny, Element::QUADRILATERAL, true,
+         (real_t)nx, (real_t)ny, false
+      );
    }
    else if (dim == 3)
    {
-      patchTopo = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, (real_t)nx, (real_t)ny, (real_t)nz);
+      patchTopo = Mesh::MakeCartesian3D
+      (
+         nx, ny, nz, Element::HEXAHEDRON,
+         (real_t)nx, (real_t)ny, (real_t)nz, false
+      );
    }
    else
    {
@@ -78,45 +86,6 @@ int main(int argc, char *argv[])
    // patchTopo.FinalizeTopology();
    // patchTopo.Finalize(false, true);
    // patchTopo.CheckBdrElementOrientation();
-
-   // 2. Create the patch-topology mesh (psuedo code)
-   // vector<Vector> vertices;
-   // vector<vector<int>> cells;
-   // linearMesh = new Mesh(dim, vertices.size(), cells.size());
-   // for (int i = 0; i < vertices.size(); ++i)
-   // {
-   //    linearMesh->AddVertex(vertices[i].m_coordinates.data());
-   // }
-
-   // Array<int> ev(numElVert);
-   // for (unsigned int i = 0; i < cells.size(); ++i) {
-   //   for (int j = 0; j < numElVert; ++j)
-   //     ev[j] = cells[i][j];
-
-   //   Element* el = linearMesh->NewElement(elGeom);
-   //   el->SetVertices(ev);
-   //   linearMesh->AddElement(el);
-   //  }
-
-   // linearMesh->FinalizeTopology();
-   // linearMesh->Finalize(false, true);
-   // linearMesh->CheckBdrElementOrientation(); // check and fix boundary element orientation
-
-
-
-   // Debugging
-   // patchTopo = Mesh::MakeCartesian2D(np, np, Element::QUADRILATERAL, true, L, L, true);
-   // patchTopo.FinalizeTopology();
-   // patchTopo.Finalize(false, true);
-   // patchTopo.CheckBdrElementOrientation();
-   // patchTopo.PrintInfo(cout);
-   // patchTopo.Print(cout);
-
-   // Debugging - compare against loaded patchtopo
-   // Mesh test("../../../miniapps/nurbs/meshes/two-squares-nurbs.mesh", 1, 1);
-   // const Mesh* ptopotest = test.NURBSext->GetPatchTopology();
-   // cout << endl << "Loaded patch topology:" << endl;
-   // ptopotest->Print(cout);
 
    // 3. Create the reference knotvectors and control points
    //    for each patch (same in all dimensions)
@@ -195,7 +164,6 @@ int main(int argc, char *argv[])
       // Debugging
       cout << "  I,J,K = " << I << " " << J << " " << K << endl;
       cout << "  NCP = " << NCP[0] << " " << NCP[1] << " " << NCP[2] << endl;
-      cout << "  CPTS = ";
 
       // Define the control points for this patch
       // The domain for each patch in physical space is [I, I+1] x [J, J+1] x [K, K+1]
@@ -207,14 +175,12 @@ int main(int argc, char *argv[])
             for (int i = 0; i < NCP[0]; i++)
             {
                dofidx = i + j*NCP[0] + k*NCP[0]*NCP[1];
-               // dofidx = k + j*NCP[2] + i*NCP[2]*NCP[1];
                int ijk[3] = {i,j,k};
 
                // Set the control points (+ weight) for the LO mesh
                for (int d = 0; d < dim; d++)
                {
                   control_points[pdim*dofidx + d] = cpts_ref[IJK[d]][ijk[d]];
-                  cout << control_points[pdim*dofidx + d] << " ";
                }
                control_points[pdim*dofidx + dim] = 1.0; // weight
             }
@@ -224,7 +190,19 @@ int main(int argc, char *argv[])
 
       // Create patch
       patches[p] = new NURBSPatch(kvs, pdim, control_points.GetData());
+
+      // Debugging
+      cout << "  Patch " << p << " : " << endl;
+      patches[p]->Print(cout);
+      cout << endl;
    }
+
+   // Debugging - different order of patches
+   Array<NURBSPatch*> newpatches(NP);
+   newpatches[0] = patches[0];
+   newpatches[1] = patches[2];
+   newpatches[2] = patches[1];
+   newpatches[3] = patches[3];
 
    // Crate the mesh
    NURBSExtension ext(&patchTopo, patches);
@@ -236,15 +214,15 @@ int main(int argc, char *argv[])
    mesh.Print(orig_ofs);
 
    // Debugging - write patchTopo to file
-   ofstream topo_ofs("topo.mesh");
-   topo_ofs.precision(8);
-   patchTopo.Print(topo_ofs);
+   // ofstream topo_ofs("topo.mesh");
+   // topo_ofs.precision(8);
+   // patchTopo.Print(topo_ofs);
 
    // // Create the LOR mesh
-   // Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
-   // ofstream ofs("lo_mesh.mesh");
-   // ofs.precision(8);
-   // lo_mesh.Print(ofs);
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
+   ofstream ofs("lo_mesh.mesh");
+   ofs.precision(8);
+   lo_mesh.Print(ofs);
 
 
    return 0;
