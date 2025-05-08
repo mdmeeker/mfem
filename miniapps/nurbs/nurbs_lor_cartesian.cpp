@@ -110,11 +110,6 @@ int main(int argc, char *argv[])
       }
       kv_ref[I] = new KnotVector(order, knots);
 
-      // Debugging
-      cout << endl << "Patch index = " << I << endl;
-      cout << "knots :" << endl;
-      kv_ref[I]->Print(cout);
-
       // Coordinates to interpolate
       x.SetSize(ncp);
       for (int i = 0; i < ncp; i++)
@@ -126,10 +121,6 @@ int main(int argc, char *argv[])
       Vector cpts(ncp);
       kv_ref[I]->GetInterpolant(x, NURBSInterpolationRule::Uniform, cpts);
       cpts_ref[I].CopyFrom(cpts.GetData());
-
-      // Debugging
-      cout << "cpts_ref[I] :" << endl;
-      cpts_ref[I].Print(cout);
    }
 
 
@@ -143,9 +134,6 @@ int main(int argc, char *argv[])
 
    for (int p = 0; p < NP; p++)
    {
-      // Debugging
-      cout << endl << "Creating patch = " << p << endl;
-
       Array<const KnotVector*> kvs(dim);
       I = p % nx;
       J = (p / nx) % ny;
@@ -156,14 +144,8 @@ int main(int argc, char *argv[])
       for (int d = 0; d < dim; d++)
       {
          kvs[d] = new KnotVector(*kv_ref[IJK[d]]);
-         cout << "  kvs[" << d << "] = ";
-         kvs[d]->Print(cout);
          NCP[d] = kvs[d]->GetNCP();
       }
-
-      // Debugging
-      cout << "  I,J,K = " << I << " " << J << " " << K << endl;
-      cout << "  NCP = " << NCP[0] << " " << NCP[1] << " " << NCP[2] << endl;
 
       // Define the control points for this patch
       // The domain for each patch in physical space is [I, I+1] x [J, J+1] x [K, K+1]
@@ -186,44 +168,27 @@ int main(int argc, char *argv[])
             }
          }
       }
-      cout << endl;
 
       // Create patch
       patches[p] = new NURBSPatch(kvs, pdim, control_points.GetData());
-
-      // Debugging
-      cout << "  Patch " << p << " : " << endl;
-      patches[p]->Print(cout);
-      cout << endl;
    }
-
-   // Debugging - different order of patches
-   Array<NURBSPatch*> newpatches(NP);
-   newpatches[0] = patches[0];
-   newpatches[1] = patches[2];
-   newpatches[2] = patches[1];
-   newpatches[3] = patches[3];
 
    // Crate the mesh
    NURBSExtension ext(&patchTopo, patches);
    Mesh mesh = Mesh(ext);
 
    // Write to file
-   ofstream orig_ofs("mesh.mesh");
+   ofstream orig_ofs("ho_mesh.mesh");
    orig_ofs.precision(8);
    mesh.Print(orig_ofs);
+   cout << "High-Order mesh written to ho_mesh.mesh" << endl;
 
-   // Debugging - write patchTopo to file
-   // ofstream topo_ofs("topo.mesh");
-   // topo_ofs.precision(8);
-   // patchTopo.Print(topo_ofs);
-
-   // // Create the LOR mesh
+   // Create the LOR mesh
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
    lo_mesh.Print(ofs);
-
+   cout << "Low-Order mesh written to lo_mesh.mesh" << endl;
 
    return 0;
 }
