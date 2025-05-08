@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
    lo_mesh.Print(ofs);
 
 
-   ofstream orig_ofs("mesh.mesh");
+   ofstream orig_ofs("ho_mesh.mesh");
    orig_ofs.precision(8);
    mesh.Print(orig_ofs);
 
