@@ -181,22 +181,31 @@ int main(int argc, char *argv[])
       patches[p] = new NURBSPatch(kvs, pdim, control_points.GetData());
    }
 
-   // Crate the mesh
+   // 5. Create the mesh
    NURBSExtension ext(&patchTopo, patches);
    Mesh mesh = Mesh(ext);
 
-   // Write to file
+   // 6. Create the LOR mesh
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
+
+   // 7. Write meshes to file
+   // High-order mesh
    ofstream orig_ofs("ho_mesh.mesh");
    orig_ofs.precision(8);
    mesh.Print(orig_ofs);
    cout << "High-Order mesh written to ho_mesh.mesh" << endl;
 
-   // Create the LOR mesh
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
+   // Low-order mesh
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
    lo_mesh.Print(ofs);
    cout << "Low-Order mesh written to lo_mesh.mesh" << endl;
+
+   // Patch topology mesh
+   // ofstream topo_ofs("topo_mesh.mesh");
+   // topo_ofs.precision(8);
+   // patchTopo.Print(topo_ofs);
+   // cout << "Patch topology mesh written to topo_mesh.mesh" << endl;
 
    return 0;
 }
