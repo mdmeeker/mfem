@@ -2,7 +2,7 @@
 //
 // Compile with: make nurbs_lor_cartesian
 //
-// Sample runs:  nurbs_lor_cartesian -d 2 -n 3 -o 3
+// Example run:  nurbs_lor_cartesian -d 2 -n 3 -o 3 -interp 3
 //
 // Description:  This example code generates a NURBS mesh "from scratch"
 //               by building up a patch topology mesh and patches. A LOR
