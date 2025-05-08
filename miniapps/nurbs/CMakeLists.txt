@@ -17,6 +17,10 @@ add_mfem_miniapp(nurbs_lor
   MAIN nurbs_lor.cpp
   LIBRARIES mfem)
 
+add_mfem_miniapp(nurbs_lor_cartesian
+  MAIN nurbs_lor_cartesian.cpp
+  LIBRARIES mfem)
+
 add_mfem_miniapp(nurbs_ex3
   MAIN nurbs_ex3.cpp
   LIBRARIES mfem)

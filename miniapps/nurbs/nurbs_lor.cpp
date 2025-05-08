@@ -6,6 +6,7 @@
 //
 // Description:  This example code generates a LOR NURBS mesh using an interpolant
 //               defined by interp_rule.
+//
 //               Interpolation rules (-interp):
 //                 - 0: Greville points (default)
 //                 - 1: Botella points
