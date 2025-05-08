@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
    int dim = 2;
    int np = 1;
    int order = 1;
-   int interp_rule = 0;
+   int interp_rule_ = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-d", "--dim",
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
                   "Number of patches in the mesh per dimension.");
    args.AddOption(&order, "-o", "--order",
                   "Order of nurbs bases.");
-   args.AddOption(&interp_rule, "-interp", "--interpolation-rule",
+   args.AddOption(&interp_rule_, "-interp", "--interpolation-rule",
                   "Interpolation Rule: 0 - Greville, 1 - Botella, 2 - Demko");
    args.Parse();
 
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
    MFEM_ASSERT(dim >= 1 && dim <= 3, "Invalid dimension");
    MFEM_ASSERT(np >= 1, "Must have at least one patch");
    MFEM_ASSERT(order >= 1, "Order of nurbs bases must be at least 1");
-   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(interp_rule);
+   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
 
    // 1. Parameters
    int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
    // patchTopo.Print(topo_ofs);
 
    // // Create the LOR mesh
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
    lo_mesh.Print(ofs);
