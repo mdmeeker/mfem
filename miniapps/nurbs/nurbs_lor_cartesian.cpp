@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
    int dim = 2;
    int np = 1;
    int order = 1;
+   int mult = 1;
    int interp_rule_ = 0;
 
    OptionsParser args(argc, argv);
@@ -37,6 +38,8 @@ int main(int argc, char *argv[])
                   "Number of patches in the mesh per dimension.");
    args.AddOption(&order, "-o", "--order",
                   "Order of nurbs bases.");
+   args.AddOption(&mult, "-m", "--mult",
+                  "Multiplicity of interior knots; must be [1, p+1].");
    args.AddOption(&interp_rule_, "-interp", "--interpolation-rule",
                   "Interpolation Rule: 0 - Greville, 1 - Botella, 2 - Demko");
    args.Parse();
@@ -46,6 +49,7 @@ int main(int argc, char *argv[])
    MFEM_ASSERT(dim >= 1 && dim <= 3, "Invalid dimension");
    MFEM_ASSERT(np >= 1, "Must have at least one patch");
    MFEM_ASSERT(order >= 1, "Order of nurbs bases must be at least 1");
+   MFEM_ASSERT(mult >= 1 && mult <= order+1, "Multiplicity must be in [1, p+1]");
    NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
 
    // 1. Parameters
@@ -83,32 +87,37 @@ int main(int argc, char *argv[])
    {
       MFEM_ABORT("Invalid dimension");
    }
-   // patchTopo.FinalizeTopology();
-   // patchTopo.Finalize(false, true);
-   // patchTopo.CheckBdrElementOrientation();
 
    // 3. Create the reference knotvectors and control points
    //    for each patch (same in all dimensions)
    Array<const KnotVector*> kv_ref(np);
    std::vector<Array<real_t>> cpts_ref(np);
-   Vector knots;  // knot values
+   Vector intervals; // intervals between knots
+   Array<int> cont;  // continuity at each knot
    Vector x;      // physical coordinates to interpolate
    int nel;       // Number of elements
+   int nknot;     // Number of knots
    int ncp;       // Number of control points
    for (int I = 0; I < np; I++)
    {
+      // We choose to define each patch such that it has (I+1)
+      // knot spans/elements in each dimension.
       nel = I + 1;
-      // For a spline basis with C^{-1} continuity at ends and
-      // C^{p-1} continuity at interior knots, NCP = order + NEL
-      ncp = order + nel;
+      // Ends always have C^{-1} continuity
+      nknot = 2*(order+1) + mult*(nel-1);
+      ncp = nknot - order - 1;
 
       // Define knot vectors
-      knots.SetSize(nel+1);
-      for (int i = 0; i < nel+1; i++)
+      intervals.SetSize(nel);
+      intervals = 1.0 / nel;
+      cont.SetSize(nel+1);
+      cont[0] = -1;
+      cont[nel] = -1;
+      for (int i = 1; i < nel; i++)
       {
-         knots[i] = (real_t)i / nel;
+         cont[i] = order-mult;
       }
-      kv_ref[I] = new KnotVector(order, knots);
+      kv_ref[I] = new KnotVector(order, intervals, cont);
 
       // Coordinates to interpolate
       x.SetSize(ncp);
@@ -122,7 +131,6 @@ int main(int argc, char *argv[])
       kv_ref[I]->GetInterpolant(x, NURBSInterpolationRule::Uniform, cpts);
       cpts_ref[I].CopyFrom(cpts.GetData());
    }
-
 
    // 4. Create the patches
    Array<NURBSPatch*> patches(NP);
