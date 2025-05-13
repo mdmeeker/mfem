@@ -6134,7 +6134,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
 
-   // 1) Initialize
+   // 1. Initialize
    // Parameters
    constexpr int maxdim = 3;              // max topological dimension
    const int dim = NURBSext->Dimension(); // topological dimension
@@ -6159,7 +6159,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
    real_t X[maxdim];                      // stores ref coords -> sets ip
    int dofidx;                            // flat index of dof/control point
 
-   // 2) Loop over patch index: get low-order knotvectors
+   // 2. Loop over patch index: get low-order knotvectors
    //    and control points to create low-order patches
    Array<NURBSPatch*> lo_patches(NP);
    for (int p = 0; p < NP; p++)
@@ -6168,7 +6168,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
       Array<const KnotVector*> lo_kvs(dim);
       NURBSext->GetPatchKnotVectors(p, ho_kvs);
 
-      // Setup
+      // 2a. Setup
       Array<int> ncp(maxdim); // number of dofs / control points per dim
       Array<int> nel(maxdim); // number of elements per dim
       ncp = 1;                // init
@@ -6196,7 +6196,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
       // Debugging
       // cout << "control_points size: " << control_points.Size() << endl;
 
-      // Compute and store the reference coordinates
+      // 2b. Compute and store the reference coordinates
       for (int d = 0; d < maxdim; d++)
       {
          x[d].SetSize(ncp[d]);
@@ -6214,7 +6214,7 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
          }
       }
 
-      // Evaluate HO B-NET to get LO control points
+      // 2c. Evaluate HO B-NET to get LO control points
       for (int k = 0; k < ncp[2]; k++)
       {
          for (int j = 0; j < ncp[1]; j++)
@@ -6256,23 +6256,15 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
          }
       }
       eidx_offset += nel.Prod();
-      // Debugging
-      // cout << "offset = " << eidx_offset << endl;
-      // cout << "control_points :" << endl;
-      // control_points.Print(mfem::out);
-      // Create low-order patch
+
+      // 2d. Create low-order patch
       lo_patches[p] = new NURBSPatch(lo_kvs, pdim, control_points.GetData());
    }
 
-   // Create new NURBSExt
+   // 3. Create new NURBSExt, use to create new Mesh
    NURBSExtension ext(
       NURBSext->GetPatchTopology(),
       lo_patches);
-
-   // Debugging
-   // cout << "Nodes =" << endl;
-   // Nodes->Print(mfem::out);
-   // cout << endl;
 
    return Mesh(ext);
 }
