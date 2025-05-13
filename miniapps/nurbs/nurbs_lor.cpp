@@ -66,14 +66,13 @@ int main(int argc, char *argv[])
       mesh.NURBSUniformRefinement();
    }
 
-   // Create the LOR mesh
+   // 5. Create the LOR mesh
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
 
    // Write to file
    ofstream ofs("lo_mesh.mesh");
    ofs.precision(8);
    lo_mesh.Print(ofs);
-
 
    ofstream orig_ofs("ho_mesh.mesh");
    orig_ofs.precision(8);
