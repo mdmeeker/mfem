@@ -2,7 +2,8 @@
 //
 // Compile with: make nurbs_lor_cartesian
 //
-// Example run:  nurbs_lor_cartesian -d 2 -n 3 -o 3 -interp 3
+// Sample runs:  nurbs_lor_cartesian -d 2 -n 4 -o 3 -interp 3
+//               nurbs_lor_cartesian -d 3 -n 5 -o 2 -nel 10
 //
 // Description:  This example code generates a NURBS mesh "from scratch"
 //               by building up a patch topology mesh and patches. A LOR
@@ -21,7 +22,6 @@
 using namespace std;
 using namespace mfem;
 
-
 int main(int argc, char *argv[])
 {
    // 1. Parse command-line options.
@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
    int order = 1;
    int mult = 1;
    int interp_rule_ = 0;
+   int nel_per_patch = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-d", "--dim",
@@ -41,23 +42,27 @@ int main(int argc, char *argv[])
    args.AddOption(&mult, "-m", "--mult",
                   "Multiplicity of interior knots; must be [1, p+1].");
    args.AddOption(&interp_rule_, "-interp", "--interpolation-rule",
-                  "Interpolation Rule: 0 - Greville, 1 - Botella, 2 - Demko");
+                  "Interpolation Rule: 0 - Greville, 1 - Botella, 2 - Demko, 3 - Uniform");
+   args.AddOption(&nel_per_patch, "-nel", "--nelements-per-patch",
+                  "Number of elements per patch per dimension. "
+                  "Default (0) is the patch index + 1.");
    args.Parse();
 
    // Print & verify options
    args.PrintOptions(cout);
-   MFEM_ASSERT(dim >= 1 && dim <= 3, "Invalid dimension");
-   MFEM_ASSERT(np >= 1, "Must have at least one patch");
-   MFEM_ASSERT(order >= 1, "Order of nurbs bases must be at least 1");
-   MFEM_ASSERT(mult >= 1 && mult <= order+1, "Multiplicity must be in [1, p+1]");
+   MFEM_VERIFY(dim >= 1 && dim <= 3, "Invalid dimension");
+   MFEM_VERIFY(np >= 1, "Must have at least one patch");
+   MFEM_VERIFY(order >= 1, "Order of nurbs bases must be at least 1");
+   MFEM_VERIFY(mult >= 1 && mult <= order+1, "Multiplicity must be in [1, p+1]");
+   MFEM_VERIFY(nel_per_patch >= 0, "Invalid elements per patch");
    NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
 
    // 1. Parameters
-   int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
-   int ny = (dim >= 2) ? np : 1;
-   int nz = (dim == 3) ? np : 1;
-   const int NP = nx*ny*nz;      // Total number of patches in the mesh
-   const int pdim = dim + 1;     // Projective/homogeneous dimension
+   const int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
+   const int ny = (dim >= 2) ? np : 1;
+   const int nz = (dim == 3) ? np : 1;
+   const int NP = nx*ny*nz;            // Total number of patches in the mesh
+   const int pdim = dim + 1;           // Projective/homogeneous dimension
 
    // 2. Create the patch-topology mesh
    //    Default ordering is space-filling-curve, set to false to get Cartesian ordering
@@ -100,9 +105,17 @@ int main(int argc, char *argv[])
    int ncp;       // Number of control points
    for (int I = 0; I < np; I++)
    {
-      // We choose to define each patch such that it has (I+1)
-      // knot spans/elements in each dimension.
-      nel = I + 1;
+      if (nel_per_patch == 0)
+      {
+         // Default - each patch has (I+1) knot spans/elements in each dimension.
+         nel = I + 1;
+      }
+      else
+      {
+         // Constant number of elements for each patch
+         nel = nel_per_patch;
+      }
+
       // Ends always have C^{-1} continuity
       nknot = 2*(order+1) + mult*(nel-1);
       ncp = nknot - order - 1;
@@ -137,7 +150,8 @@ int main(int argc, char *argv[])
    int I,J,K; // patch indices
    int i,j,k; // dof indices
    int dofidx;
-   Array<int> NCP(3); // number of control points per dim
+   constexpr int maxdim = 3;
+   Array<int> NCP(maxdim); // number of control points per dim
    NCP = 1; // init
 
    for (int p = 0; p < NP; p++)
@@ -146,7 +160,7 @@ int main(int argc, char *argv[])
       I = p % nx;
       J = (p / nx) % ny;
       K = p / (ny * nx);
-      int IJK[3] = {I,J,K};
+      int IJK[maxdim] = {I,J,K};
 
       // Collect the knot vectors for this patch
       for (int d = 0; d < dim; d++)
@@ -165,7 +179,7 @@ int main(int argc, char *argv[])
             for (int i = 0; i < NCP[0]; i++)
             {
                dofidx = i + j*NCP[0] + k*NCP[0]*NCP[1];
-               int ijk[3] = {i,j,k};
+               int ijk[maxdim] = {i,j,k};
 
                // Set the control points (+ weight) for the LO mesh
                for (int d = 0; d < dim; d++)
