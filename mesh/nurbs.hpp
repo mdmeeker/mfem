@@ -67,9 +67,6 @@ protected:
    /// Compute unique knots and their multiplicities.
    void ComputeUniqueKnots() const;
 
-   /// Dispatcher for different rules
-   Vector GetInterpolationPoints(NURBSInterpolationRule interp_rule) const;
-
 public:
    /// Create an empty KnotVector.
    KnotVector() { }
@@ -229,6 +226,9 @@ public:
        GetBotella, GetDemko or GetGreville. FindInterpolant uses the Botella
        points, however, the Demko points might be more appropriate. */
    MFEM_DEPRECATED void FindInterpolant(Array<Vector*> &x);
+
+   /// Dispatcher for different rules
+   Vector GetInterpolationPoints(NURBSInterpolationRule interp_rule) const;
 
    /** @brief Get the control points @a for an interpolating spline that has the
       values @a x at the knot location @a u.

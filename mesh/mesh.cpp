@@ -6350,7 +6350,7 @@ void Mesh::GetEdgeToUniqueKnotvector(Array<int> &edge_to_ukv, Array<int> &ukv_to
    int dim = Dimension();
    Array<int> v(2); // vertices of an edge
 
-   // 1D case is special: edge index == elemnt index
+   // 1D case is special: edge index == element index
    // ukv_to_pkv = Identity , edge_to_ukv = ele_to_pkv
    if (dim == 1)
    {
@@ -10935,9 +10935,9 @@ void Mesh::GetNURBSPatches(Array<NURBSPatch*> &patches)
    MFEM_VERIFY(NURBSext, "Must be a NURBS mesh");
    // This sets the data in NURBSPatch(es) from the control points (Nodes)
    NURBSext->ConvertToPatches(*Nodes);
-   const int NP = NURBSext->GetNP();
 
    // Copy patches
+   const int NP = NURBSext->GetNP();
    patches.SetSize(NP);
    for (int p = 0; p < NP; p++)
    {

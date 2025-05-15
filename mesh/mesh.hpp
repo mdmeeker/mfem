@@ -1431,7 +1431,7 @@ public:
    void SetPatchBdrAttribute(int i, int attr);
 
    /// Returns a copy of patches; not const as this first sets the patches
-   /// in NURBSext using control points
+   /// in NURBSext using control points defined by Nodes
    void GetNURBSPatches(Array<NURBSPatch*> &patches);
 
    /// Returns the type of element i.
