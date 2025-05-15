@@ -14,7 +14,6 @@
 //
 
 #include "mfem.hpp"
-// #include <fstream>
 #include <iostream>
 
 using namespace std;
@@ -227,8 +226,8 @@ int main(int argc, char *argv[])
    solver.SetMaxIter(1e5);
    solver.SetPrintLevel(1);
    // These tolerances end up getting squared
-   solver.SetRelTol(sqrt(1e-6));
-   solver.SetAbsTol(sqrt(1e-14));
+   solver.SetRelTol(1e-6);
+   solver.SetAbsTol(0);
 
    solver.Mult(B, X);
 

@@ -3,7 +3,7 @@
 // Compile with: make nurbs_lor_cartesian
 //
 // Sample runs:  nurbs_lor_cartesian -d 2 -n 4 -o 3 -interp 3
-//               nurbs_lor_cartesian -d 3 -n 5 -o 2 -nel 10
+//               nurbs_lor_cartesian -d 3 -n 5 -o 2 -nel 10 -m 2
 //               nurbs_lor_cartesian -d 2 -n 1 -o 2 -nel 50 -a 0.3
 //
 // Description:  This example code generates a NURBS mesh "from scratch"
