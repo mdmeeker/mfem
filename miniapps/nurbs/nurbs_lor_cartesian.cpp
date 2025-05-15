@@ -131,11 +131,18 @@ int main(int argc, char *argv[])
 
       // Define knot vectors by intervals and continuity
       intervals.SetSize(nel);
-      for (int i = 0; i < nel; i++)
+      if (nel == 1)
       {
-         intervals[i] = 1 + (alpha - 1) * i / (nel - 1);
+         intervals[0] = 1.0;
       }
-      intervals /= intervals.Sum(); // normalize
+      else
+      {
+         for (int i = 0; i < nel; i++)
+         {
+            intervals[i] = 1.0 + (alpha - 1.0) * i / (nel - 1.0);
+         }
+         intervals /= intervals.Sum(); // normalize
+      }
 
       cont.SetSize(nel+1);
       cont[0] = cont[nel] = -1;
