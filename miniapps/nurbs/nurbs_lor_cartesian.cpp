@@ -4,11 +4,13 @@
 //
 // Sample runs:  nurbs_lor_cartesian -d 2 -n 4 -o 3 -interp 3
 //               nurbs_lor_cartesian -d 3 -n 5 -o 2 -nel 10
+//               nurbs_lor_cartesian -d 2 -n 1 -o 2 -nel 50 -a 0.3
 //
 // Description:  This example code generates a NURBS mesh "from scratch"
 //               by building up a patch topology mesh and patches. A LOR
 //               version of the mesh is then generated using an interpolant
-//               defined by interp_rule.
+//               defined by interp_rule. The domain of the mesh is always
+//               [0, np] in each dimension, where np is the number of patches
 //
 //               Interpolation rules (-interp):
 //                 - 0: Greville points (default)
@@ -31,6 +33,7 @@ int main(int argc, char *argv[])
    int mult = 1;
    int interp_rule_ = 0;
    int nel_per_patch = 0;
+   real_t alpha = 1.0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-d", "--dim",
@@ -46,6 +49,9 @@ int main(int argc, char *argv[])
    args.AddOption(&nel_per_patch, "-nel", "--nelements-per-patch",
                   "Number of elements per patch per dimension. "
                   "Default (0) is the patch index + 1.");
+   args.AddOption(&alpha, "-a", "--alpha",
+                  "Knotvectors are distributed in [0,1]. alpha is the ratio of the largest "
+                  "vs smallest interval. 1 = uniform. If negative, will use reciprocal.");
    args.Parse();
 
    // Print & verify options
@@ -55,6 +61,8 @@ int main(int argc, char *argv[])
    MFEM_VERIFY(order >= 1, "Order of nurbs bases must be at least 1");
    MFEM_VERIFY(mult >= 1 && mult <= order+1, "Multiplicity must be in [1, p+1]");
    MFEM_VERIFY(nel_per_patch >= 0, "Invalid elements per patch");
+   MFEM_VERIFY(alpha != 0, "Invalid knot distribution parameter");
+   alpha = (alpha > 0) ? alpha : -1.0/alpha;
    NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
 
    // 1. Parameters
@@ -99,10 +107,11 @@ int main(int argc, char *argv[])
    std::vector<Array<real_t>> cpts_ref(np);
    Vector intervals; // intervals between knots
    Array<int> cont;  // continuity at each knot
-   Vector x;      // physical coordinates to interpolate
-   int nel;       // Number of elements
-   int nknot;     // Number of knots
-   int ncp;       // Number of control points
+   Vector x;         // physical coordinates to interpolate
+   int nel;          // Number of elements
+   int nknot;        // Number of knots
+   int ncp;          // Number of control points
+
    for (int I = 0; I < np; I++)
    {
       if (nel_per_patch == 0)
@@ -120,28 +129,34 @@ int main(int argc, char *argv[])
       nknot = 2*(order+1) + mult*(nel-1);
       ncp = nknot - order - 1;
 
-      // Define knot vectors
+      // Define knot vectors by intervals and continuity
       intervals.SetSize(nel);
-      intervals = 1.0 / nel;
+      for (int i = 0; i < nel; i++)
+      {
+         intervals[i] = 1 + (alpha - 1) * i / (nel - 1);
+      }
+      intervals /= intervals.Sum(); // normalize
+
       cont.SetSize(nel+1);
-      cont[0] = -1;
-      cont[nel] = -1;
+      cont[0] = cont[nel] = -1;
       for (int i = 1; i < nel; i++)
       {
          cont[i] = order-mult;
       }
       kv_ref[I] = new KnotVector(order, intervals, cont);
 
-      // Coordinates to interpolate
+      // Knots to interpolate at
+      Vector u = kv_ref[I]->GetInterpolationPoints(NURBSInterpolationRule::Botella);
+      // Coordinates to interpolate (linearly increasing from I to I+1)
       x.SetSize(ncp);
       for (int i = 0; i < ncp; i++)
       {
-         x[i] = (real_t)i / (ncp-1) + I;
+         x[i] = u[i]/u[ncp-1] + I;
       }
       // Find control points that interpolate the coordinates
       cpts_ref[I].SetSize(ncp);
       Vector cpts(ncp);
-      kv_ref[I]->GetInterpolant(x, NURBSInterpolationRule::Uniform, cpts);
+      kv_ref[I]->GetInterpolant(x, u, cpts);
       cpts_ref[I].CopyFrom(cpts.GetData());
    }
 
