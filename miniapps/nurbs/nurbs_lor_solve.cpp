@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
    FiniteElementCollection* fec = mesh.GetNodes()->OwnFEC();
    FiniteElementSpace fespace = FiniteElementSpace(&mesh, fec);
 
-   const int Ndof = fespace.GetTrueVSize();
+   const long Ndof = fespace.GetTrueVSize();
    cout << "Number of finite element unknowns: " << Ndof << endl;
    cout << "Number of elements: " << fespace.GetNE() << endl;
    cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
       FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
       cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
       FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec);
-      const int lo_Ndof = lo_fespace.GetTrueVSize();
+      const long lo_Ndof = lo_fespace.GetTrueVSize();
       MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
 
       Array<int> lo_ess_tdof_list, lo_ess_bdr(lo_mesh.bdr_attributes.Max());
@@ -194,11 +194,11 @@ int main(int argc, char *argv[])
       lo_a.FormLinearSystem(lo_ess_tdof_list, lo_x, lo_b, lo_A, lo_X, lo_B);
 
       // Set up HypreBoomerAMG on the low-order problem
-      HYPRE_BigInt row_starts[2] = {0, Ndof};
+      HYPRE_BigInt row_starts[2] = {0, (int)Ndof};
       SparseMatrix *lo_Amat = new SparseMatrix(lo_a.SpMat());
       HypreParMatrix *lo_A_hypre = new HypreParMatrix(
          MPI_COMM_WORLD,
-         HYPRE_BigInt(Ndof),
+         HYPRE_BigInt((int)Ndof),
          row_starts,
          lo_Amat
       );
@@ -236,9 +236,9 @@ int main(int argc, char *argv[])
    a.RecoverFEMSolution(X, b, x);
 
    // 13. Collect results and write to file
-   const int Niter = solver.GetNumIterations();
-   const int dof_per_sec_solve = Ndof * Niter / timeSolve;
-   const int dof_per_sec_total = Ndof * Niter / timeTotal;
+   const long Niter = solver.GetNumIterations();
+   const long dof_per_sec_solve = Ndof * Niter / timeSolve;
+   const long dof_per_sec_total = Ndof * Niter / timeTotal;
    cout << "Time to assemble: " << timeAssemble << " seconds" << endl;
    cout << "Time to solve: " << timeSolve << " seconds" << endl;
    cout << "Total time: " << timeTotal << " seconds" << endl;
