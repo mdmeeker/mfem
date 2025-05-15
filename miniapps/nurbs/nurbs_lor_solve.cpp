@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
    bool patchAssembly = false;
    int ref_levels = 0;
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
-   int interp_rule = 0;
+   int interp_rule_ = 0;
    int preconditioner = 0;
 
    OptionsParser args(argc, argv);
@@ -51,8 +51,8 @@ int main(int argc, char *argv[])
                   "Number of uniform mesh refinements.");
    args.AddOption(&nurbs_degree_increase, "-incdeg", "--nurbs-degree-increase",
                   "Elevate NURBS mesh degree by this amount.");
-   args.AddOption(&interp_rule, "-proj", "--projection",
-                  "Projection Type: 0 - Greville, 1 - Botella, 2 - Demko, 3 - Uniform");
+   args.AddOption(&interp_rule_, "-int", "--interpolation-rule",
+                  "Interpolation rule: 0 - Greville, 1 - Botella, 2 - Demko, 3 - Uniform");
    args.AddOption(&preconditioner, "-pc", "--preconditioner",
                   "Preconditioner: 0 - none, 1 - diagonal, 2 - LOR AMG");
    args.Parse();
@@ -60,12 +60,7 @@ int main(int argc, char *argv[])
    // Print & verify options
    args.PrintOptions(cout);
    MFEM_VERIFY(!(patchAssembly && !pa), "Patch assembly must be used with -pa");
-   if (preconditioner != 0)
-   {
-      MFEM_VERIFY(nurbs_degree_increase > 0,
-                  "LOR preconditioner requires degree increase");
-   }
-   NURBSInterpolationRule sptype = static_cast<NURBSInterpolationRule>(interp_rule);
+   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
@@ -163,7 +158,7 @@ int main(int argc, char *argv[])
       cout << "Setting up preconditioner (LOR AMG) ... " << endl;
 
       // Create the LOR mesh
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(sptype);
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
 
       // Write low order mesh to file
       ofstream ofs("lo_mesh.mesh");
@@ -171,6 +166,7 @@ int main(int argc, char *argv[])
       lo_mesh.Print(ofs);
 
       FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
+      cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
       FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec);
       const int lo_Ndof = lo_fespace.GetTrueVSize();
       MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
@@ -265,7 +261,7 @@ int main(int argc, char *argv[])
    results_ofs << patchAssembly << ", "               // settings
                << pa << ", "
                << preconditioner << ", "
-               << interp_rule << ", "
+               << interp_rule_ << ", "
                << mesh_file << ", "                   // mesh
                << ref_levels << ", "
                << nurbs_degree_increase << ", "
@@ -297,7 +293,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-// For each patch, sets
+// For each patch, sets integration rules
 void SetPatchIntegrationRules(const Mesh &mesh,
                               const SplineIntegrationRule &splineRule,
                               BilinearFormIntegrator * bfi)
@@ -314,18 +310,19 @@ void SetPatchIntegrationRules(const Mesh &mesh,
       // Construct 1D integration rules by applying the rule ir to each knot span.
       for (int i=0; i<dim; ++i)
       {
+         const int order = kv[i]->GetOrder();
+
          if ( splineRule == SplineIntegrationRule::FULL_GAUSSIAN )
          {
-            const int order = kv[i]->GetOrder();
-            const IntegrationRule ir = IntRules.Get(Geometry::SEGMENT, 2*order);
+            const IntegrationRule* ir = &IntRules.Get(Geometry::SEGMENT, 2*order);
+            ir1D[i] = ir->ApplyToKnotIntervals(*kv[i]);
             // ir1D[i] = IntegrationRule::ApplyToKnotIntervals(ir,*kv[i]);
-            ir1D[i] = ir.ApplyToKnotIntervals(*kv[i]);
          }
-         else if ( splineRule == SplineIntegrationRule::REDUCED_GAUSSIAN )
-         {
-            // ir1D[i] = IntegrationRule::GetIsogeometricReducedGaussianRule(*kv[i]);
-            MFEM_ABORT("Unknown PatchIntegrationRule1D")
-         }
+         // else if ( splineRule == SplineIntegrationRule::REDUCED_GAUSSIAN )
+         // {
+         //    // ir1D[i] = IntegrationRule::GetIsogeometricReducedGaussianRule(*kv[i]);
+         //    MFEM_ABORT("Unknown PatchIntegrationRule1D")
+         // }
          else
          {
             MFEM_ABORT("Unknown PatchIntegrationRule1D")
