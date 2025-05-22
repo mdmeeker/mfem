@@ -8,9 +8,8 @@
 //               different preconditioners and records some stats.
 //               Preconditioner (-pc) choices:
 //                 - 0: No PC
-//                 - 1: LOR AMG (uniform spacing)
-//                 - 2: LOR AMG (greville abscissa)
-//                 - 3: LOR AMG (botella abscissa)
+//                 - 1: Jacobi
+//                 - 2: LOR AMG (choose interpolation with -interp)
 //
 
 #include "mfem.hpp"
@@ -39,6 +38,7 @@ int main(int argc, char *argv[])
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
    int interp_rule_ = 0;
    int preconditioner = 0;
+   bool visualization = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -55,6 +55,9 @@ int main(int argc, char *argv[])
                   "Interpolation rule: 0 - Greville, 1 - Botella, 2 - Demko, 3 - Uniform");
    args.AddOption(&preconditioner, "-pc", "--preconditioner",
                   "Preconditioner: 0 - none, 1 - diagonal, 2 - LOR AMG");
+   args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
+                  "--no-visualization",
+                  "Enable or disable GLVis visualization.");
    args.Parse();
 
    // Print & verify options
@@ -161,9 +164,12 @@ int main(int argc, char *argv[])
       Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
 
       // Write low order mesh to file
-      ofstream ofs("lo_mesh.mesh");
-      ofs.precision(8);
-      lo_mesh.Print(ofs);
+      if (visualization)
+      {
+         ofstream ofs("lo_mesh.mesh");
+         ofs.precision(8);
+         lo_mesh.Print(ofs);
+      }
 
       FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
       cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
@@ -279,7 +285,8 @@ int main(int argc, char *argv[])
 
    results_ofs.close();
 
-   // 14. Save the mesh and the inverted solution
+   // 14. Save the mesh and the solution
+   if (visualization)
    {
       cout << "Saving mesh and solution to file..." << endl;
       ofstream mesh_ofs("mesh.mesh");
