@@ -19,8 +19,14 @@ int main(int argc, char *argv[])
    Vector shape(kv.GetOrder()+1);
    int kidx = kv.CalcShape(shape, ui);
    cout << "kidx = " << kidx << endl;
-
    shape.Print(cout);
+
+
+   // test calcshapes
+   Vector newknots({0.5, 1.5, 2.0, 2.0, 2.5, 3.5, 4.5});
+   std::vector<KnotVector::ShapeValues> shapes = kv.CalcShapes(newknots);
+   cout << "knot 0 = " << shapes[0].u << endl;
+   shapes[0].shape.Print();
 
    return 0;
 }

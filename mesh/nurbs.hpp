@@ -190,6 +190,14 @@ public:
    // The following functions evaluate shape functions, which are B-spline basis
    // functions.
 
+   // Struct for storing the evaluation of the shape functions at a given knot
+   struct ShapeValues
+   {
+      real_t u;     // knot
+      int dofidx;   // index of first non-zero dof
+      Vector shape; // non-zero shape functions
+   };
+
    /** @brief Calculate the nonvanishing shape function values in @a shape for
        the element corresponding to knot index @a i and element reference
        coordinate @a xi. */
@@ -198,6 +206,10 @@ public:
    /** @brief Calculate the nonvanishing shape function values in @a shape for
        knot @a u. Returns the first non-zero dof index. */
    int CalcShape(Vector &shape, real_t u) const;
+
+   /** @brief Calculate the nonvanishing shape function values for a vector of
+       knots @a u. Returns the first non-zero dof index. */
+   std::vector<ShapeValues> CalcShapes(const Vector &u) const;
 
    /** @brief Calculate derivatives of the nonvanishing shape function values in
        @a grad for the element corresponding to knot index @a i and element
@@ -506,21 +518,6 @@ public:
 
    int GetDataSize() const;
 
-   /// Get the data (control points) of this patch
-   /// Returns a copy of data (control points) for this patch
-   // const real_t* GetData() const { return data; }
-   void GetData(Array<real_t> &d) const
-   {
-      mfem::out << "GetData: nd=" << nd << std::endl;
-      const int ND = GetDataSize();
-      d.SetSize(ND);
-      for (int i = 0; i < ND; i++)
-      {
-         d[i] = data[i];
-      }
-      mfem::out << "GetData: data[5]=" << data[5] << std::endl;
-   }
-
    // Standard B-NET access functions
 
    /// 1D access function. @a i is a B-NET index, and @a l is a variable index.
@@ -568,6 +565,14 @@ public:
    /** Elevate KnotVectors in all directions to degree @a degree if given,
        otherwise to the maximum current degree among all directions. */
    int MakeUniformDegree(int degree = -1);
+
+   /** @brief Returns the matrix that interpolates DOFs on this patch to
+         the locations defined by the tensor product of the knots in @a kvs.
+         The matrix is of size [(Prod(kvs.Size) * vdim) x (NCP * vdim)]
+         and cartesian ordering is assumed. @a vdim is the vector dimension
+         of the output matrix - values are tiled if vdim > 1. */
+   SparseMatrix GetInterpolationMatrix(const Array<Vector*> &kvs,
+                                       const int vdim = 1) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */

@@ -742,6 +742,21 @@ int KnotVector::CalcShape(Vector &shape, real_t u) const
    return kidx;
 }
 
+std::vector<KnotVector::ShapeValues> KnotVector::CalcShapes(const Vector &u) const
+{
+   const int size = u.Size();
+   std::vector<ShapeValues> shapes(size);
+
+   for (int i = 0; i < size; ++i)
+   {
+      Vector shape(Order+1);
+      int dofidx = CalcShape(shape, u[i]);
+      shapes[i] = ShapeValues({u[i], dofidx, shape});
+   }
+
+   return shapes;
+}
+
 // Routine from "The NURBS book" - 2nd ed - Piegl and Tiller
 // Algorithm A2.3 p. 72
 void KnotVector::CalcDShape(Vector &grad, int i, real_t xi) const
@@ -2238,6 +2253,58 @@ int NURBSPatch::MakeUniformDegree(int degree)
    }
 
    return maxd;
+}
+
+SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
+                                                const int vdim) const
+{
+   // Check inputs
+   const int tdim = kvs.Size();  // Topological dimension
+   MFEM_VERIFY(vdim == 1, "Not implemented yet");
+   MFEM_VERIFY(tdim == kv.Size(),
+               "NURBSPatch::GetInterpolationMatrix : "
+               "Invalid number of knot vectors.");
+   MFEM_VERIFY(vdim >= 1,
+               "NURBSPatch::GetInterpolationMatrix : "
+               "vdim must be >= 1.");
+
+   // Setup
+   Array<int> sizes(tdim); // Number of knots (per dim) to interpolate to
+   int nnz_rows = 1;       // Maximum non-zeros for a row
+   for (int d = 0; d < tdim; d++)
+   {
+      sizes[d] = kvs[d]->Size();
+      nnz_rows *= kv[d]->GetOrder()+1;
+      // Check that the output knots are contained within the patch
+      MFEM_VERIFY(kvs[d]->Min() >= (*kv[d])[0] &&
+                  kvs[d]->Max() <= (*kv[d])[kv[d]->Size()-1],
+                  "NURBSPatch::GetInterpolationMatrix : "
+                  "Output knots must be contained within the patch.");
+   }
+
+   // Evaluate shape functions independently in each dimension,
+   // taking advantage of the tensor product structure
+
+   // std::vector
+   // for (int d = 0; d < tdim; d++)
+   // {
+   //    for (int i = 0; i < sizes[d]; i++)
+   //    {
+   //       const real_t knot = (*kvs[d])[i];
+   //       Vector shape(kv[d]->GetOrder()+1);
+   //       const int dofidx = kv[d]->CalcShape(shape, knot);
+
+   // }
+
+   // find
+
+
+
+
+   // Build the interpolation matrix
+   SparseMatrix R(sizes.Prod()*vdim, GetDataSize()/Dim*vdim, nnz_rows);
+
+   return R;
 }
 
 NURBSPatch *Interpolate(NURBSPatch &p1, NURBSPatch &p2)
