@@ -1055,9 +1055,6 @@ public:
        Cartesian order. */
    void GetPatchDofs(const int patch, Array<int> &dofs);
 
-   /// Return NURBSPatch object
-   const NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
-
    /// Returns a deep copy of the patch topology mesh
    Mesh GetPatchTopology() const { return Mesh(*patchTopo); }
 

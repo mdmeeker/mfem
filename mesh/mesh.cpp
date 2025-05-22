@@ -6262,9 +6262,8 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
    }
 
    // 3. Create new NURBSExt, use to create new Mesh
-   NURBSExtension ext(
-      NURBSext->GetPatchTopology(),
-      lo_patches);
+   const Mesh patchtopo = NURBSext->GetPatchTopology();
+   NURBSExtension ext(&patchtopo, lo_patches);
 
    return Mesh(ext);
 }
