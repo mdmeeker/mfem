@@ -28,5 +28,23 @@ int main(int argc, char *argv[])
    cout << "knot 0 = " << shapes[0].u << endl;
    shapes[0].shape.Print();
 
+   // test GetInterpolationMatrix
+   Mesh mesh("ho_mesh.mesh", 1, 1);
+   Array<NURBSPatch *> patches;
+   mesh.GetNURBSPatches(patches);
+   Mesh lo_mesh("lo_mesh.mesh", 1, 1);
+   Array<NURBSPatch *> lo_patches;
+   lo_mesh.GetNURBSPatches(lo_patches);
+
+   // test getting unique knots from patch
+   Array<Vector *> uknots;
+   patches[0]->GetUniqueKnots(uknots);
+
+   cout << "GetInterpolationMatrix" << endl;
+   SparseMatrix R;
+   R = patches[0]->GetInterpolationMatrix(*lo_patches[0]);
+   cout << "R = " << endl;
+   R.Print(cout);
+
    return 0;
 }

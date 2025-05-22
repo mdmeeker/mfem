@@ -294,6 +294,8 @@ public:
 
    real_t GetKnotMult(int i) const;
 
+   int GetNUK() const;
+
    /// Reverse the knots.
    void Flip();
 
@@ -566,12 +568,20 @@ public:
        otherwise to the maximum current degree among all directions. */
    int MakeUniformDegree(int degree = -1);
 
+   /** @brief Caller is responsible for deleting the returned object. */
+   void GetUniqueKnots(Array<Vector*> &kvs);
+
    /** @brief Returns the matrix that interpolates DOFs on this patch to
          the locations defined by the tensor product of the knots in @a kvs.
          The matrix is of size [(Prod(kvs.Size) * vdim) x (NCP * vdim)]
          and cartesian ordering is assumed. @a vdim is the vector dimension
          of the output matrix - values are tiled if vdim > 1. */
    SparseMatrix GetInterpolationMatrix(const Array<Vector*> &kvs,
+                                       const int vdim = 1) const;
+
+   /** @brief Construct the interpolation matrix from this patch to the points
+       defined by the unique knots of @a patch. */
+   SparseMatrix GetInterpolationMatrix(NURBSPatch &patch,
                                        const int vdim = 1) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
