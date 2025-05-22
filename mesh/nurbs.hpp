@@ -195,6 +195,10 @@ public:
        coordinate @a xi. */
    void CalcShape  (Vector &shape, int i, real_t xi) const;
 
+   /** @brief Calculate the nonvanishing shape function values in @a shape for
+       knot @a u. Returns the first non-zero dof index. */
+   int CalcShape(Vector &shape, real_t u) const;
+
    /** @brief Calculate derivatives of the nonvanishing shape function values in
        @a grad for the element corresponding to knot index @a i and element
        reference coordinate @a xi. */

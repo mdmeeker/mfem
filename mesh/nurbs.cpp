@@ -731,6 +731,17 @@ void KnotVector::CalcShape(Vector &shape, int i, real_t xi) const
    }
 }
 
+int KnotVector::CalcShape(Vector &shape, real_t u) const
+{
+   int kspan = GetSpan(u);
+   real_t xref = GetRefPoint(u, kspan);
+   // Referred to as the "knot index" - maybe should be named dof index?
+   int kidx = kspan - Order;
+
+   CalcShape(shape, kidx, xref);
+   return kidx;
+}
+
 // Routine from "The NURBS book" - 2nd ed - Piegl and Tiller
 // Algorithm A2.3 p. 72
 void KnotVector::CalcDShape(Vector &grad, int i, real_t xi) const
