@@ -814,6 +814,9 @@ protected:
    /// Set @a patch_to_bel.
    void SetPatchToBdrElements();
 
+   /// Return NURBSPatch object; returned object should NOT be deleted.
+   const NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
+
    /// To be used by ParNURBSExtension constructor(s)
    NURBSExtension() : el_dof(nullptr), bel_dof(nullptr) { }
 
@@ -1055,8 +1058,13 @@ public:
    /// Return NURBSPatch object
    const NURBSPatch* GetPatch(int patch) const { return patches[patch]; }
 
-   /// Return patch topology
-   const Mesh* GetPatchTopology() const { return patchTopo; }
+   /// Returns a deep copy of the patch topology mesh
+   Mesh GetPatchTopology() const { return Mesh(*patchTopo); }
+
+   /** Returns a deep copy of all instantiated patches. To ensure that patches
+       are instantiated, use Mesh::GetNURBSPatches() instead. Caller gets
+       ownership of the returned object, and is responsible for deletion.*/
+   void GetPatches(Array<NURBSPatch*> &patches);
 
    /// Return the array of indices of all elements in patch @a patch.
    const Array<int>& GetPatchElements(int patch);

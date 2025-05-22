@@ -2774,26 +2774,25 @@ NURBSExtension::NURBSExtension(const Mesh *patch_topology,
       patches[p] = new NURBSPatch(*patches_[p]);
    }
 
-   // GetEdgeToUniqueKnotvector
-   Array<int> ukv_to_pkv;
-   patchTopo->GetEdgeToUniqueKnotvector(edge_to_ukv, ukv_to_pkv);
+   Array<int> ukv_to_rpkv;
+   patchTopo->GetEdgeToUniqueKnotvector(edge_to_ukv, ukv_to_rpkv);
    own_topo = true;
 
    CheckPatches(); // This is checking the edge_to_ukv mapping
 
-   // Set number of **unique** knot vectors
-   NumOfKnotVectors = ukv_to_pkv.Size();
+   // Set number of unique (not comprehensive) knot vectors
+   NumOfKnotVectors = ukv_to_rpkv.Size();
    knotVectors.SetSize(NumOfKnotVectors);
    knotVectors = NULL;
 
    // Assign the unique knot vectors from patches
-   int pkv, p, d;
    for (int i = 0; i < NumOfKnotVectors; i++)
    {
-      // pkv = p*dim + d
-      pkv = ukv_to_pkv[i];
-      p = pkv / Dimension();
-      d = pkv % Dimension();
+      // pkv = p*dim + d for an arbitrarily chosen patch p,
+      // in its reference direction d
+      const int pkv = ukv_to_rpkv[i];
+      const int p = pkv / Dimension();
+      const int d = pkv % Dimension();
       knotVectors[i] = new KnotVector(*patches[p]->GetKV(d));
    }
 
@@ -2803,7 +2802,7 @@ NURBSExtension::NURBSExtension(const Mesh *patch_topology,
    GenerateOffsets();
    CountElements();
    CountBdrElements();
-   // Can this be inferred from inputs?
+
    NumOfActiveElems = NumOfElements;
    activeElem.SetSize(NumOfElements);
    activeElem = true;
@@ -2813,10 +2812,6 @@ NURBSExtension::NURBSExtension(const Mesh *patch_topology,
    GenerateElementDofTable();
    GenerateActiveBdrElems();
    GenerateBdrElementDofTable();
-
-   // Set from NURBSPatch data?
-   weights.SetSize(GetNDof());
-   weights = 1.0;
 
    ConnectBoundaries();
 }
@@ -5254,6 +5249,16 @@ void NURBSExtension::GetElementIJK(int elem, Array<int> & ijk)
 {
    MFEM_VERIFY(ijk.Size() == el_to_IJK.NumCols(), "");
    el_to_IJK.GetRow(elem, ijk);
+}
+
+void NURBSExtension::GetPatches(Array<NURBSPatch*> &patches_copy)
+{
+   const int NP = patches.Size();
+   patches_copy.SetSize(NP);
+   for (int p = 0; p < NP; p++)
+   {
+      patches_copy[p] = new NURBSPatch(*GetPatch(p));
+   }
 }
 
 void NURBSExtension::SetPatchToElements()
