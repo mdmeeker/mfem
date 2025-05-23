@@ -576,13 +576,21 @@ public:
          The matrix is of size [(Prod(kvs.Size) * vdim) x (NCP * vdim)]
          and cartesian ordering is assumed. @a vdim is the vector dimension
          of the output matrix - values are tiled if vdim > 1. */
-   SparseMatrix GetInterpolationMatrix(const Array<Vector*> &kvs,
-                                       int vdim = 1) const;
+   void GetInterpolationMatrix(SparseMatrix &R,
+                               const Array<Vector*> &kvs,
+                               int vdim = 1,
+                               int row_offset = 0,
+                               int col_offset = 0,
+                               bool set_size = false) const;
 
    /** @brief Construct the interpolation matrix from this patch to the points
        defined by the unique knots of @a patch. */
-   SparseMatrix GetInterpolationMatrix(NURBSPatch &patch,
-                                       int vdim = 1) const;
+   void GetInterpolationMatrix(SparseMatrix &R,
+                               NURBSPatch &patch,
+                               int vdim = 1,
+                               int row_offset = 0,
+                               int col_offset = 0,
+                               bool set_size = false) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */

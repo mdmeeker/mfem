@@ -6268,6 +6268,58 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
    return Mesh(ext);
 }
 
+SparseMatrix Mesh::GetNURBSInterpolationMatrix(Mesh &mesh, int vdim)
+{
+   MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
+   MFEM_VERIFY(mesh.IsNURBS(), "Input mesh must be a NURBS mesh.")
+
+   const int NP = NURBSext->GetNP();
+   const int dim = NURBSext->Dimension();
+
+   MFEM_VERIFY(NP == mesh.NURBSext->GetNP(),
+              "Meshes must have the same number of patches.");
+   MFEM_VERIFY(dim == mesh.NURBSext->Dimension(),
+               "Meshes must have the same topological dimension.");
+
+   // Number of rows and cols per patch/sub interpolation matrix
+   Array<int> nrows(NP);
+   Array<int> ncols(NP);
+   for (int p = 0; p < NP; p++)
+   {
+      nrows[p] = vdim;
+      ncols[p] = 1;
+      for (int d = 0; d < dim; d++)
+      {
+         nrows[p] *= mesh.NURBSext->GetKnotVector(d)->GetNUK();
+         ncols[p] *= NURBSext->GetKnotVector(d)->GetNCP();
+      }
+   }
+   mfem::out << "Mesh::GetNURBSInterpolationMatrix : " << endl;
+   mfem::out << "nrows = " << nrows.Sum()
+             << ", ncols = " << ncols.Sum() << endl;
+   SparseMatrix R(nrows.Sum(), ncols.Sum());
+
+   // Use unique knots from target patch as interpolation points
+   Array<NURBSPatch*> patches(NP);
+   GetNURBSPatches(patches);
+   Array<NURBSPatch*> target_patches(NP);
+   mesh.GetNURBSPatches(target_patches);
+
+   // Build the interpolation matrix
+   int row_offset = 0;
+   int col_offset = 0;
+   for (int p = 0; p < NP; p++)
+   {
+      patches[p]->GetInterpolationMatrix(R, *target_patches[p], vdim, row_offset,
+                                         col_offset, false);
+      row_offset += nrows[p];
+      col_offset += ncols[p];
+   }
+
+   R.Finalize();
+   return R;
+}
+
 void Mesh::LoadPatchTopo(std::istream &input, Array<int> &edge_to_ukv)
 {
    SetEmpty();

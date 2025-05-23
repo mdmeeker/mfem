@@ -2449,6 +2449,10 @@ public:
    Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule =
                              NURBSInterpolationRule::Greville);
 
+   /** @brief Builds up an interpolation matrix patch-by-patch using
+              the unique knots of @a mesh as interpolation points */
+   SparseMatrix GetNURBSInterpolationMatrix(Mesh &mesh, int vdim=1);
+
    /// @name Print/Save/Export methods
    /// @{
 
