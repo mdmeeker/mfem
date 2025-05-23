@@ -2281,14 +2281,13 @@ void NURBSPatch::GetUniqueKnots(Array<Vector*> &kvs)
    }
 }
 
-
 SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
-                                                const int vdim) const
+                                                int vdim) const
 {
    // Check inputs
    const int tdim = kvs.Size();  // Topological dimension
    constexpr int maxtdim = 3;
-   MFEM_VERIFY(vdim == 1, "Not implemented yet");
+   // MFEM_VERIFY(vdim == 1, "Not implemented yet");
    MFEM_VERIFY(tdim == kv.Size(),
                "NURBSPatch::GetInterpolationMatrix : "
                "Invalid number of knot vectors.");
@@ -2330,7 +2329,7 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
 
    // Build the interpolation matrix, row-by-row
    const int nrows = sizes.Prod()*vdim;
-   const int ncols = ndofs.Prod()*vdim;
+   const int ncols = ndofs.Prod();//*vdim;
    const int NNZ = nnzs.Prod();
    mfem::out << "nrows = " << nrows << std::endl;
    mfem::out << "ncols = " << ncols << std::endl;
@@ -2369,8 +2368,12 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
                {
                   val *= shapes[d][xyz[d]].shape[dijk[d]];
                }
-               // Assign
-               R.Set(row, col, val);
+               // Assign (if vdim > 1, tile)
+               for (int drow = 0; drow < vdim; drow++)
+               {
+                  R.Set(row*vdim+drow, col, val);
+               }
+               // R.Set(row, col, val);
             }
          }
       }
@@ -2381,7 +2384,7 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
 }
 
 SparseMatrix NURBSPatch::GetInterpolationMatrix(NURBSPatch &patch,
-                                                const int vdim) const
+                                                int vdim) const
 {
    mfem::out << "test" << endl;
    Array<Vector*> kvs;

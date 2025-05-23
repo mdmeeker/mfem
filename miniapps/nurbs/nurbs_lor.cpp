@@ -37,11 +37,13 @@ int main(int argc, char *argv[])
    uknots[1] = new Vector({0.3});
 
    // ----- Get the interpolation matrix R -----
-   /** R should be a 2x3 matrix with values:
+   /** R should be a 4x3 matrix with values:
+       0.252  0.336  0.112  0.108  0.144  0.048
        0.252  0.336  0.112  0.108  0.144  0.048
        0.028  0.224  0.448  0.012  0.096  0.192
+       0.028  0.224  0.448  0.012  0.096  0.192
     */
-   SparseMatrix R = patch.GetInterpolationMatrix(uknots);
+   SparseMatrix R = patch.GetInterpolationMatrix(uknots,2);
 
    // Print as dense matrix
    cout << "R = " << endl;

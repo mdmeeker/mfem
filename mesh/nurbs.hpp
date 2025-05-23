@@ -577,12 +577,12 @@ public:
          and cartesian ordering is assumed. @a vdim is the vector dimension
          of the output matrix - values are tiled if vdim > 1. */
    SparseMatrix GetInterpolationMatrix(const Array<Vector*> &kvs,
-                                       const int vdim = 1) const;
+                                       int vdim = 1) const;
 
    /** @brief Construct the interpolation matrix from this patch to the points
        defined by the unique knots of @a patch. */
    SparseMatrix GetInterpolationMatrix(NURBSPatch &patch,
-                                       const int vdim = 1) const;
+                                       int vdim = 1) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */
