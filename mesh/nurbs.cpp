@@ -2287,6 +2287,7 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
 {
    // Check inputs
    const int tdim = kvs.Size();  // Topological dimension
+   constexpr int maxtdim = 3;
    MFEM_VERIFY(vdim == 1, "Not implemented yet");
    MFEM_VERIFY(tdim == kv.Size(),
                "NURBSPatch::GetInterpolationMatrix : "
@@ -2296,12 +2297,17 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
                "vdim must be >= 1.");
 
    // Setup
-   Array<int> sizes(tdim); // Number of knots (per dim) to interpolate to
-   int nnz_rows = 1;       // Maximum non-zeros for a row
+   Array<int> sizes(maxtdim); // Number of knots (per dim) to interpolate to
+   Array<int> ndofs(maxtdim); // Number of dofs in this patch (per dim)
+   Array<int> nnzs(maxtdim);  // Maximum non-zero shape functions (per dim)
+   sizes = 1;                 // Initialize to 1
+   ndofs = 1;
+   nnzs = 1;
    for (int d = 0; d < tdim; d++)
    {
       sizes[d] = kvs[d]->Size();
-      nnz_rows *= kv[d]->GetOrder()+1;
+      ndofs[d] = kv[d]->GetNCP();
+      nnzs[d] = kv[d]->GetOrder() + 1;
       // Check that the output knots are contained within the patch
       MFEM_VERIFY(kvs[d]->Min() >= (*kv[d])[0] &&
                   kvs[d]->Max() <= (*kv[d])[kv[d]->Size()-1],
@@ -2313,24 +2319,64 @@ SparseMatrix NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
    // taking advantage of the tensor product structure
    // shapes[dim][knot]
    std::vector<std::vector<KnotVector::ShapeValues>> shapes(tdim);
-
    for (int d = 0; d < tdim; d++)
    {
       shapes[d] = kv[d]->CalcShapes(*kvs[d]);
    }
 
    // Debugging
-   mfem::out << "shapes[0][0] = " << std::endl;
-   shapes[0][0].shape.Print();
+   // mfem::out << "shapes[0][0] = " << std::endl;
+   // shapes[0][0].shape.Print();
 
-   // find
+   // Build the interpolation matrix, row-by-row
+   const int nrows = sizes.Prod()*vdim;
+   const int ncols = ndofs.Prod()*vdim;
+   const int NNZ = nnzs.Prod();
+   mfem::out << "nrows = " << nrows << std::endl;
+   mfem::out << "ncols = " << ncols << std::endl;
+   mfem::out << "NNZ = " << NNZ << std::endl;
+   SparseMatrix R(nrows, ncols);//, NNZ);
+   // sizes of flattened dimensions
+   const int flatsizes[maxtdim] = {1, sizes[0], sizes[0]*sizes[1]};
+   const int flatndofs[maxtdim] = {1, ndofs[0], ndofs[0]*ndofs[1]};
+   // {x,y,z} loop is over new knots
+   for (int z = 0; z < sizes[2]; z++)
+   {
+      for (int y = 0; y < sizes[1]; y++)
+      {
+         for (int x = 0; x < sizes[0]; x++)
+         {
+            int row = x + y*flatsizes[1] + z*flatsizes[2];
+            int xyz[maxtdim] = {x,y,z};
 
+            // Get the root dof index
+            int dof0 = shapes[0][x].dofidx;
+            for (int d = 1; d < tdim; d++)
+            {
+               dof0 += shapes[d][xyz[d]].dofidx * flatsizes[d];
+            }
+            // Loop over flattened dofs (cartesian ordering)
+            for (int dofidx = 0; dofidx < NNZ; dofidx++)
+            {
+               int di = dofidx % nnzs[0];
+               int dj = (dofidx / nnzs[0]) % nnzs[1];
+               int dk = dofidx / (nnzs[0] * nnzs[1]);
+               int dijk[maxtdim] = {di,dj,dk};
 
+               int col = dof0 + di + dj*flatndofs[1] + dk*flatndofs[2];
+               real_t val = shapes[0][x].shape[di];
+               for (int d = 1; d < tdim; d++)
+               {
+                  val *= shapes[d][xyz[d]].shape[dijk[d]];
+               }
+               // Assign
+               R.Set(row, col, val);
+            }
+         }
+      }
+   }
 
-
-   // Build the interpolation matrix
-   SparseMatrix R(sizes.Prod()*vdim, GetDataSize()/Dim*vdim, nnz_rows);
-
+   R.Finalize();
    return R;
 }
 

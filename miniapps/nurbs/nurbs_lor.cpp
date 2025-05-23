@@ -12,39 +12,48 @@ using namespace mfem;
 
 int main(int argc, char *argv[])
 {
-   KnotVector kv(2, Vector({0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 4.0, 4.0, 5.0}));
-   kv.Print(cout);
+   // ----- Test GetInterpolationMatrix -----
+   // Build a patch from scratch
+   const int tdim = 2;
+   const int pdim = 2;
+   Array<const KnotVector*> kvs(tdim);
+   kvs[0] = new KnotVector(2, Vector({0.0, 1.0}));
+   kvs[1] = new KnotVector(1, Vector({0.0, 1.0}));
+   Vector control_points(
+   {
+      0.0, 0.0, 1.0,
+      1.0, 0.0, 1.0,
+      2.0, 0.0, 1.0,
+      0.0, 1.0, 1.0,
+      1.0, 1.0, 1.0,
+      2.0, 1.0, 1.0,
+   });
+   NURBSPatch patch(kvs, pdim, control_points.GetData());
 
-   const real_t ui = 3.5;
-   Vector shape(kv.GetOrder()+1);
-   int kidx = kv.CalcShape(shape, ui);
-   cout << "kidx = " << kidx << endl;
-   shape.Print(cout);
-
-
-   // test calcshapes
-   Vector newknots({0.5, 1.5, 2.0, 2.0, 2.5, 3.5, 4.5});
-   std::vector<KnotVector::ShapeValues> shapes = kv.CalcShapes(newknots);
-   cout << "knot 0 = " << shapes[0].u << endl;
-   shapes[0].shape.Print();
-
-   // test GetInterpolationMatrix
-   Mesh mesh("ho_mesh.mesh", 1, 1);
-   Array<NURBSPatch *> patches;
-   mesh.GetNURBSPatches(patches);
-   Mesh lo_mesh("lo_mesh.mesh", 1, 1);
-   Array<NURBSPatch *> lo_patches;
-   lo_mesh.GetNURBSPatches(lo_patches);
-
-   // test getting unique knots from patch
+   // Define new knots
    Array<Vector *> uknots;
-   patches[0]->GetUniqueKnots(uknots);
+   uknots.SetSize(tdim);
+   uknots[0] = new Vector({0.4, 0.80});
+   uknots[1] = new Vector({0.3});
 
-   cout << "GetInterpolationMatrix" << endl;
-   SparseMatrix R;
-   R = patches[0]->GetInterpolationMatrix(*lo_patches[0]);
+   // ----- Get the interpolation matrix R -----
+   /** R should be a 2x3 matrix with values:
+       0.252  0.336  0.112  0.108  0.144  0.048
+       0.028  0.224  0.448  0.012  0.096  0.192
+    */
+   SparseMatrix R = patch.GetInterpolationMatrix(uknots);
+
+   // Print as dense matrix
    cout << "R = " << endl;
-   R.Print(cout);
+   R.ToDenseMatrix()->PrintMatlab(cout);
+
+
+   // Free memory
+   for (int i = 0; i < tdim; i++)
+   {
+      delete kvs[i];
+      delete uknots[i];
+   }
 
    return 0;
 }
