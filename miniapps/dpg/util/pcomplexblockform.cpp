@@ -101,7 +101,6 @@ void ParComplexBlockForm::ParallelAssemble(BlockMatrix *m_r,
    }
 }
 
-
 void ParComplexBlockForm::BuildProlongation()
 {
    P = new BlockOperator(dof_offsets, tdof_offsets);
