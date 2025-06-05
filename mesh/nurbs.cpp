@@ -386,7 +386,8 @@ KnotVector *KnotVector::DegreeElevate(int t) const
    return newkv;
 }
 
-Vector KnotVector::GetInterpolationPoints(NURBSInterpolationRule interp_rule) const
+Vector KnotVector::GetInterpolationPoints(NURBSInterpolationRule interp_rule)
+const
 {
    // Define the function that gets the interpolation points
    std::function<real_t(int)> GetPoints;
@@ -433,7 +434,8 @@ KnotVector *KnotVector::Linearize(NURBSInterpolationRule interp_rule) const
    return newkv;
 }
 
-real_t KnotVector::GetUniqueKnot(int i) const {
+real_t KnotVector::GetUniqueKnot(int i) const
+{
    if (uknot.Size() == 0)
    {
       ComputeUniqueKnots();
@@ -441,7 +443,8 @@ real_t KnotVector::GetUniqueKnot(int i) const {
    return uknot[i];
 }
 
-real_t KnotVector::GetKnotMult(int i) const {
+real_t KnotVector::GetKnotMult(int i) const
+{
    if (uknot_mult.Size() == 0)
    {
       ComputeUniqueKnots();
@@ -751,7 +754,8 @@ int KnotVector::CalcShape(Vector &shape, real_t u) const
    return kidx;
 }
 
-std::vector<KnotVector::ShapeValues> KnotVector::CalcShapes(const Vector &u) const
+std::vector<KnotVector::ShapeValues> KnotVector::CalcShapes(
+   const Vector &u) const
 {
    const int size = u.Size();
    std::vector<ShapeValues> shapes(size);
@@ -2281,22 +2285,145 @@ void NURBSPatch::GetUniqueKnots(Array<Vector*> &kvs)
    }
 }
 
-void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
-                                        const Array<Vector*> &kvs,
-                                        int vdim,
-                                        int row_offset,
-                                        int col_offset,
-                                        bool set_size) const
+int NURBSPatch::GetNUK() const
+{
+   int nuk = 1;
+   for (int d = 0; d < kv.Size(); d++)
+   {
+      nuk *= kv[d]->GetNUK();
+   }
+   return nuk;
+}
+
+int NURBSPatch::GetNCP() const
+{
+   int ncp = 1;
+   for (int d = 0; d < kv.Size(); d++)
+   {
+      ncp *= kv[d]->GetNCP();
+   }
+   return ncp;
+}
+
+// void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
+//                                         const Array<Vector*> &kvs,
+//                                         int vdim,
+//                                         int row_offset,
+//                                         int col_offset,
+//                                         bool set_size) const
+// {
+//    // Check inputs
+//    const int dim = kvs.Size();  // Topological dimension
+//    constexpr int maxdim = 3;
+//    MFEM_VERIFY(dim == kv.Size(),
+//                "NURBSPatch::GetInterpolationMatrix : "
+//                "Invalid number of knot vectors.");
+//    MFEM_VERIFY(vdim >= 1,
+//                "NURBSPatch::GetInterpolationMatrix : "
+//                "vdim must be >= 1.");
+
+//    // Setup
+//    Array<int> sizes(maxdim); // Number of knots (per dim) to interpolate to
+//    Array<int> ndofs(maxdim); // Number of dofs in this patch (per dim)
+//    Array<int> nnzs(maxdim);  // Maximum non-zero shape functions (per dim)
+//    sizes = 1;                 // Initialize to 1
+//    ndofs = 1;
+//    nnzs = 1;
+//    for (int d = 0; d < dim; d++)
+//    {
+//       sizes[d] = kvs[d]->Size();
+//       ndofs[d] = kv[d]->GetNCP();
+//       nnzs[d] = kv[d]->GetOrder() + 1;
+//       // Check that the output knots are contained within the patch
+//       MFEM_VERIFY(kvs[d]->Min() >= (*kv[d])[0] &&
+//                   kvs[d]->Max() <= (*kv[d])[kv[d]->Size()-1],
+//                   "NURBSPatch::GetInterpolationMatrix : "
+//                   "Output knots must be contained within the patch.");
+//    }
+
+//    // Evaluate shape functions independently in each dimension,
+//    // taking advantage of the tensor product structure
+//    std::vector<std::vector<KnotVector::ShapeValues>> shapes(dim);
+//    for (int d = 0; d < dim; d++)
+//    {
+//       shapes[d] = kv[d]->CalcShapes(*kvs[d]);
+//    }
+
+//    // Build the interpolation matrix, row-by-row
+//    const int nrows = sizes.Prod()*vdim;
+//    const int ncols = ndofs.Prod();//*vdim;
+//    const int NNZ = nnzs.Prod();
+
+//    MFEM_VERIFY(!set_size, "Not working");
+//    // if (set_size)
+//    // {
+//    //    mfem::out << "NURBSPatch::GetInterpolationMatrix : "
+//    //              << "Setting size of output matrix to "
+//    //              << nrows << " x " << ncols << endl;
+//    //    R.OverrideSize(nrows, ncols);
+//    // }
+//    // mfem::out << "Rsize = " << R.Height() << " x " << R.Width() << endl;
+
+//    // Check that the matrix is large enough
+//    MFEM_VERIFY(row_offset+nrows <= R.Height() &&
+//                col_offset+ncols <= R.Width(),
+//                "NURBSPatch::GetInterpolationMatrix : "
+//                "Output matrix is not large enough.");
+//    // SparseMatrix R(nrows, ncols);//, NNZ);
+//    // sizes of flattened dimensions
+//    const int flatsizes[maxdim] = {1, sizes[0], sizes[0]*sizes[1]};
+//    const int flatndofs[maxdim] = {1, ndofs[0], ndofs[0]*ndofs[1]};
+//    // {x,y,z} loop is over new knots
+//    for (int z = 0; z < sizes[2]; z++)
+//    {
+//       for (int y = 0; y < sizes[1]; y++)
+//       {
+//          for (int x = 0; x < sizes[0]; x++)
+//          {
+//             int row = x + y*flatsizes[1] + z*flatsizes[2];
+//             int xyz[maxdim] = {x,y,z};
+
+//             // Get the root dof index
+//             int dof0 = shapes[0][x].dofidx;
+//             for (int d = 1; d < dim; d++)
+//             {
+//                dof0 += shapes[d][xyz[d]].dofidx * flatsizes[d];
+//             }
+//             // Loop over flattened dofs (cartesian ordering)
+//             for (int dofidx = 0; dofidx < NNZ; dofidx++)
+//             {
+//                int di = dofidx % nnzs[0];
+//                int dj = (dofidx / nnzs[0]) % nnzs[1];
+//                int dk = dofidx / (nnzs[0] * nnzs[1]);
+//                int dijk[maxdim] = {di,dj,dk};
+
+//                int col = dof0 + di + dj*flatndofs[1] + dk*flatndofs[2];
+//                real_t val = shapes[0][x].shape[di];
+//                for (int d = 1; d < dim; d++)
+//                {
+//                   val *= shapes[d][xyz[d]].shape[dijk[d]];
+//                }
+//                // Assign (if vdim > 1, tile)
+//                for (int drow = 0; drow < vdim; drow++)
+//                {
+//                   R.Set(row*vdim+drow + row_offset, col + col_offset, val);
+//                }
+//             }
+//          }
+//       }
+//    }
+
+//    // R.Finalize();
+//    // return R;
+// }
+
+void NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
+                                        SparseMatrix &R) const
 {
    // Check inputs
    const int dim = kvs.Size();  // Topological dimension
    constexpr int maxdim = 3;
-   MFEM_VERIFY(dim == kv.Size(),
-               "NURBSPatch::GetInterpolationMatrix : "
-               "Invalid number of knot vectors.");
-   MFEM_VERIFY(vdim >= 1,
-               "NURBSPatch::GetInterpolationMatrix : "
-               "vdim must be >= 1.");
+   MFEM_VERIFY(dim == kv.Size(), "dim != number of knot vectors.");
 
    // Setup
    Array<int> sizes(maxdim); // Number of knots (per dim) to interpolate to
@@ -2326,23 +2453,13 @@ void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
    }
 
    // Build the interpolation matrix, row-by-row
-   const int nrows = sizes.Prod()*vdim;
-   const int ncols = ndofs.Prod();//*vdim;
+   const int nrows = sizes.Prod();
+   const int ncols = ndofs.Prod();
    const int NNZ = nnzs.Prod();
 
-   MFEM_VERIFY(!set_size, "Not working");
-   // if (set_size)
-   // {
-   //    mfem::out << "NURBSPatch::GetInterpolationMatrix : "
-   //              << "Setting size of output matrix to "
-   //              << nrows << " x " << ncols << endl;
-   //    R.OverrideSize(nrows, ncols);
-   // }
-   // mfem::out << "Rsize = " << R.Height() << " x " << R.Width() << endl;
-
    // Check that the matrix is large enough
-   MFEM_VERIFY(row_offset+nrows <= R.Height() &&
-               col_offset+ncols <= R.Width(),
+   MFEM_VERIFY(nrows <= R.Height() &&
+               ncols <= R.Width(),
                "NURBSPatch::GetInterpolationMatrix : "
                "Output matrix is not large enough.");
    // SparseMatrix R(nrows, ncols);//, NNZ);
@@ -2379,11 +2496,8 @@ void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
                {
                   val *= shapes[d][xyz[d]].shape[dijk[d]];
                }
-               // Assign (if vdim > 1, tile)
-               for (int drow = 0; drow < vdim; drow++)
-               {
-                  R.Set(row*vdim+drow + row_offset, col + col_offset, val);
-               }
+               // Assign
+               R.Set(row, col, val);
             }
          }
       }
@@ -2393,16 +2507,12 @@ void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
    // return R;
 }
 
-void NURBSPatch::GetInterpolationMatrix(SparseMatrix &R,
-                                        NURBSPatch &patch,
-                                        int vdim,
-                                        int row_offset,
-                                        int col_offset,
-                                        bool set_size) const
+void NURBSPatch::GetInterpolationMatrix(NURBSPatch &patch,
+                                        SparseMatrix &R) const
 {
    Array<Vector*> kvs;
    patch.GetUniqueKnots(kvs);
-   GetInterpolationMatrix(R, kvs, vdim, row_offset, col_offset, set_size);
+   GetInterpolationMatrix(kvs, R);
 }
 
 NURBSPatch *Interpolate(NURBSPatch &p1, NURBSPatch &p2)

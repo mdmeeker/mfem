@@ -64,7 +64,8 @@ int main(int argc, char *argv[])
    MFEM_VERIFY(nel_per_patch >= 0, "Invalid elements per patch");
    MFEM_VERIFY(alpha != 0, "Invalid knot distribution parameter");
    alpha = (alpha > 0) ? alpha : -1.0/alpha;
-   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
+   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>
+                                        (interp_rule_);
 
    // 1. Parameters
    const int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
@@ -84,18 +85,18 @@ int main(int argc, char *argv[])
    else if (dim == 2)
    {
       patchTopo = Mesh::MakeCartesian2D
-      (
-         nx, ny, Element::QUADRILATERAL, true,
-         (real_t)nx, (real_t)ny, false
-      );
+                  (
+                     nx, ny, Element::QUADRILATERAL, true,
+                     (real_t)nx, (real_t)ny, false
+                  );
    }
    else if (dim == 3)
    {
       patchTopo = Mesh::MakeCartesian3D
-      (
-         nx, ny, nz, Element::HEXAHEDRON,
-         (real_t)nx, (real_t)ny, (real_t)nz, false
-      );
+                  (
+                     nx, ny, nz, Element::HEXAHEDRON,
+                     (real_t)nx, (real_t)ny, (real_t)nz, false
+                  );
    }
    else
    {
@@ -223,6 +224,8 @@ int main(int argc, char *argv[])
    Mesh mesh = Mesh(ext);
 
    // 6. Create the LOR mesh
+   // const int Ndof = mesh.NURBSext->GetNDof();
+   // SparseMatrix* R = new SparseMatrix(Ndof, Ndof);
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
 
    // 7. Write meshes to file
@@ -243,6 +246,9 @@ int main(int argc, char *argv[])
    // topo_ofs.precision(8);
    // patchTopo.Print(topo_ofs);
    // cout << "Patch topology mesh written to topo_mesh.mesh" << endl;
+
+   // Free memory
+   // delete R;
 
    return 0;
 }

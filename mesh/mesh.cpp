@@ -6130,7 +6130,125 @@ void Mesh::UpdateNURBS()
    GenerateFaces();
 }
 
-Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
+// Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
+// {
+//    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
+
+//    // 1. Initialize
+//    // Parameters
+//    constexpr int maxdim = 3;              // max topological dimension
+//    const int dim = NURBSext->Dimension(); // topological dimension
+//    const int sdim = spaceDim;             // (physical) spatial dimension
+//    const int pdim = sdim + 1;             // projective/homogeneous dimension
+//    const int NP = NURBSext->GetNP();      // number of patches
+
+//    MFEM_VERIFY(dim >= 1 && dim <= 3,
+//                "GetLowOrderNURBSMesh: topological dim out of range");
+
+//    // To compute and store
+//    std::vector<Array<int>>    el(maxdim); // element (unique knot span) indices
+//    std::vector<Array<real_t>> x(maxdim);  // reference coordinates
+
+//    // Temp / mutable
+//    IntegrationPoint ip;                   // holds ref coords, x
+//    int kspan;                             // knot span index
+//    Vector vals(sdim);                     // control point values
+//    int eidx;                              // element index
+//    int eidx_offset = 0;                   // eidx offset (previous patches)
+//    real_t u;                              // knot value
+//    real_t X[maxdim];                      // stores ref coords -> sets ip
+//    int dofidx;                            // flat index of dof/control point
+
+//    // 2. Loop over patch index: get low-order knotvectors
+//    //    and control points to create low-order patches
+//    Array<NURBSPatch*> lo_patches(NP);
+//    for (int p = 0; p < NP; p++)
+//    {
+//       Array<const KnotVector*> ho_kvs(dim);
+//       Array<const KnotVector*> lo_kvs(dim);
+//       NURBSext->GetPatchKnotVectors(p, ho_kvs);
+
+//       // 2a. Setup
+//       Array<int> ncp(maxdim); // number of dofs / control points per dim
+//       Array<int> nel(maxdim); // number of elements per dim
+//       ncp = 1;                // init
+//       nel = 1;
+//       for (int d = 0; d < dim; d++)
+//       {
+//          ncp[d] = ho_kvs[d]->GetNCP();
+//          nel[d] = ho_kvs[d]->GetNE();
+
+//          // For each HO knotvector, construct its corresponding LO knotvector
+//          // Greville/Botella/etc points are the LO knots
+//          lo_kvs[d] = ho_kvs[d]->Linearize(interp_rule);
+//       }
+
+//       Array<real_t> control_points((pdim) * ncp.Prod());
+
+//       // 2b. Compute and store the reference coordinates
+//       for (int d = 0; d < maxdim; d++)
+//       {
+//          x[d].SetSize(ncp[d]);
+//          el[d].SetSize(ncp[d]);
+//          el[d][0] = 0;
+//          if (d < dim)
+//          {
+//             for (int i = 0; i < ncp[d]; i++)
+//             {
+//                u = (*lo_kvs[d])[i+1]; // +1 because of repeated first knot
+//                kspan = ho_kvs[d]->GetSpan(u);
+//                x[d][i] = ho_kvs[d]->GetRefPoint(u, kspan);
+//                el[d][i] = ho_kvs[d]->GetUniqueSpan(u);
+//             }
+//          }
+//       }
+
+//       // 2c. Evaluate HO B-NET to get LO control points
+//       for (int k = 0; k < ncp[2]; k++)
+//       {
+//          for (int j = 0; j < ncp[1]; j++)
+//          {
+//             for (int i = 0; i < ncp[0]; i++)
+//             {
+//                // Element index (TODO: Use `GetPatchElements`?)
+//                eidx = el[0][i]
+//                     + el[1][j] * nel[0]
+//                     + el[2][k] * (nel[0] * nel[1])
+//                     + eidx_offset;
+//                dofidx = i + j*ncp[0] + k*ncp[0]*ncp[1];
+//                int ijk[maxdim] = {i,j,k};
+//                // Get control point
+//                for (int d = 0; d < dim; d++)
+//                {
+//                   X[d] = x[d][ijk[d]];
+//                }
+//                ip.Set(X, dim);
+//                Nodes->GetVectorValue(eidx, ip, vals);
+
+//                // Set the control points (+ weight) for the LO mesh
+//                for (int sd = 0; sd < sdim; sd++)
+//                {
+//                   control_points[pdim*dofidx + sd] = vals[sd];
+//                }
+//                control_points[pdim*dofidx + sdim] = 1.0; // weight
+//             }
+//          }
+//       }
+//       eidx_offset += nel.Prod();
+
+//       // 2d. Create low-order patch
+//       lo_patches[p] = new NURBSPatch(lo_kvs, pdim, control_points.GetData());
+//    }
+
+//    // 3. Create new NURBSExt, use to create new Mesh
+//    const Mesh patchtopo = NURBSext->GetPatchTopology();
+//    NURBSExtension ext(&patchtopo, lo_patches);
+
+//    return Mesh(ext);
+// }
+
+
+Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, SparseMatrix* R)
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
 
@@ -6158,10 +6276,12 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
    real_t u;                              // knot value
    real_t X[maxdim];                      // stores ref coords -> sets ip
    int dofidx;                            // flat index of dof/control point
+   // int ndof = NURBSext->GetNDof();        // number of dofs in the HO (and LO) mesh
 
    // 2. Loop over patch index: get low-order knotvectors
    //    and control points to create low-order patches
    Array<NURBSPatch*> lo_patches(NP);
+
    for (int p = 0; p < NP; p++)
    {
       Array<const KnotVector*> ho_kvs(dim);
@@ -6181,20 +6301,9 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
          // For each HO knotvector, construct its corresponding LO knotvector
          // Greville/Botella/etc points are the LO knots
          lo_kvs[d] = ho_kvs[d]->Linearize(interp_rule);
-
-         // Debugging
-         // cout << "ho_kv[" << d << "]= "; ho_kvs[d]->Print(cout);
-         // cout << "lo_kv[" << d << "]= "; lo_kvs[d]->Print(cout);
       }
 
-      // Debugging
-      // cout << "Patch " << p << ": " << endl;
-      // cout << "  nel = " << nel[0] << " x " << nel[1] << endl;
-      // cout << "  ncp = " << ncp[0] << " x " << ncp[1] << endl;
-
       Array<real_t> control_points((pdim) * ncp.Prod());
-      // Debugging
-      // cout << "control_points size: " << control_points.Size() << endl;
 
       // 2b. Compute and store the reference coordinates
       for (int d = 0; d < maxdim; d++)
@@ -6236,22 +6345,13 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
                ip.Set(X, dim);
                Nodes->GetVectorValue(eidx, ip, vals);
 
-               // Debugging
-               // cout << "[element " << setw(2) << eidx << "]";
-               // cout << "  e=(" << setw(2) << el[0][i] << " , "
-                              //  << setw(2) << el[1][j] << ")";
-               // cout << "  u=(" << setw(4) << el[0][i] << " , "
-                              //  << setw(4) << el[1][j] << ")";
-               // cout << "  x=(" << setw(4) << x[0][i]  << " , "
-                              //  << setw(4) << x[1][j] << ")";
-               // cout << "  c=(" << setw(4) << vals[0] << " , " << setw(4) << vals[1] << ")" << endl;
-
                // Set the control points (+ weight) for the LO mesh
                for (int sd = 0; sd < sdim; sd++)
                {
                   control_points[pdim*dofidx + sd] = vals[sd];
                }
                control_points[pdim*dofidx + sdim] = 1.0; // weight
+
             }
          }
       }
@@ -6259,6 +6359,43 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
 
       // 2d. Create low-order patch
       lo_patches[p] = new NURBSPatch(lo_kvs, pdim, control_points.GetData());
+
+   }
+
+
+   // 2e. Get transfer (HO -> LO) matrix
+   if (R)
+   {
+      const FiniteElementSpace fespace(*GetNodalFESpace());
+      Array<NURBSPatch*> ho_patches(NP);
+      GetNURBSPatches(ho_patches);
+      Array<int> dofs;
+      for (int p = 0; p < NP; p++)
+      {
+         int N = ho_patches[p]->GetNCP();
+         SparseMatrix smat(N, N);
+         ho_patches[p]->GetInterpolationMatrix(*lo_patches[p], smat);
+         NURBSext->GetPatchDofs(p, dofs);
+
+         // Set contributions in the global matrix - apply dof ordering
+         Array<int> cols;
+         Vector srow;
+         for (int r=0; r<N; ++r)
+         {
+            smat.GetRow(r, cols, srow);
+
+            for (int i=0; i<cols.Size(); ++i)
+            {
+               cols[i] = dofs[cols[i]];
+            }
+            fespace.DofsToVDofs(cols);
+            for (int vd = 0; vd < vdim; vd++)
+            {
+               int vdrow = fespace.DofToVDof(dofs[r], vd);
+               R->SetRow(vdrow, cols, srow);
+            }
+         }
+      }
    }
 
    // 3. Create new NURBSExt, use to create new Mesh
@@ -6268,52 +6405,58 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule)
    return Mesh(ext);
 }
 
-SparseMatrix Mesh::GetNURBSInterpolationMatrix(Mesh &mesh, int vdim)
+SparseMatrix Mesh::GetNURBSInterpolationMatrix(Mesh &target_mesh, int vdim)
 {
    MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
-   MFEM_VERIFY(mesh.IsNURBS(), "Input mesh must be a NURBS mesh.")
+   MFEM_VERIFY(target_mesh.IsNURBS(), "Input mesh must be a NURBS mesh.")
 
    const int NP = NURBSext->GetNP();
    const int dim = NURBSext->Dimension();
 
-   MFEM_VERIFY(NP == mesh.NURBSext->GetNP(),
+   MFEM_VERIFY(NP == target_mesh.NURBSext->GetNP(),
               "Meshes must have the same number of patches.");
-   MFEM_VERIFY(dim == mesh.NURBSext->Dimension(),
-               "Meshes must have the same topological dimension.");
+   MFEM_VERIFY(dim == target_mesh.NURBSext->Dimension(),
+              "Meshes must have the same topological dimension.");
 
-   // Number of rows and cols per patch/sub interpolation matrix
-   Array<int> nrows(NP);
-   Array<int> ncols(NP);
-   for (int p = 0; p < NP; p++)
-   {
-      nrows[p] = vdim;
-      ncols[p] = 1;
-      for (int d = 0; d < dim; d++)
-      {
-         nrows[p] *= mesh.NURBSext->GetKnotVector(d)->GetNUK();
-         ncols[p] *= NURBSext->GetKnotVector(d)->GetNCP();
-      }
-   }
+   // Initialize global matrix
    mfem::out << "Mesh::GetNURBSInterpolationMatrix : " << endl;
-   mfem::out << "nrows = " << nrows.Sum()
-             << ", ncols = " << ncols.Sum() << endl;
-   SparseMatrix R(nrows.Sum(), ncols.Sum());
+   mfem::out << "nrows = " << target_mesh.NURBSext->GetNV()
+             << ", ncols = " << NURBSext->GetNDof() << endl;
+   SparseMatrix R(target_mesh.NURBSext->GetNV(), NURBSext->GetNDof());
 
-   // Use unique knots from target patch as interpolation points
    Array<NURBSPatch*> patches(NP);
    GetNURBSPatches(patches);
    Array<NURBSPatch*> target_patches(NP);
-   mesh.GetNURBSPatches(target_patches);
+   target_mesh.GetNURBSPatches(target_patches);
+   Array<int> dofs;
+   Array<int> target_dofs;
 
-   // Build the interpolation matrix
-   int row_offset = 0;
-   int col_offset = 0;
+   // Combine contributions from each patch
    for (int p = 0; p < NP; p++)
    {
-      patches[p]->GetInterpolationMatrix(R, *target_patches[p], vdim, row_offset,
-                                         col_offset, false);
-      row_offset += nrows[p];
-      col_offset += ncols[p];
+      int nrows = target_patches[p]->GetNUK();
+      int ncols = patches[p]->GetNCP();
+      SparseMatrix smat(nrows, ncols);
+
+      // Get the (cartesian-ordered) patch interpolation matrix
+      patches[p]->GetInterpolationMatrix(*target_patches[p], smat);
+
+      // Set contributions in the global matrix - apply dof ordering
+      // target_mesh.do
+
+      NURBSext->GetPatchDofs(p, dofs);
+      target_mesh.NURBSext->GetPatchDofs(p, target_dofs);
+      Array<int> cols;
+      Vector srow;
+      for (int r=0; r<nrows; ++r)
+      {
+         smat.GetRow(r, cols, srow);
+         for (int i=0; i<cols.Size(); ++i)
+         {
+            cols[i] = dofs[cols[i]];
+         }
+         R.SetRow(target_dofs[r], cols, srow);
+      }
    }
 
    R.Finalize();

@@ -2446,12 +2446,13 @@ public:
    void DegreeElevate(int rel_degree, int degree = 16);
    ///@}
 
-   Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule =
-                             NURBSInterpolationRule::Greville);
+   Mesh GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule,
+                             int vdim = 1,
+                             SparseMatrix* R = nullptr);
 
    /** @brief Builds up an interpolation matrix patch-by-patch using
-              the unique knots of @a mesh as interpolation points */
-   SparseMatrix GetNURBSInterpolationMatrix(Mesh &mesh, int vdim=1);
+              the unique knots of @a target_mesh as interpolation points */
+   SparseMatrix GetNURBSInterpolationMatrix(Mesh &target_mesh, int vdim=1);
 
    /// @name Print/Save/Export methods
    /// @{

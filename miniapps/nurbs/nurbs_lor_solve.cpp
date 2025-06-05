@@ -63,7 +63,8 @@ int main(int argc, char *argv[])
    // Print & verify options
    args.PrintOptions(cout);
    MFEM_VERIFY(!(patchAssembly && !pa), "Patch assembly must be used with -pa");
-   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>(interp_rule_);
+   NURBSInterpolationRule interp_rule = static_cast<NURBSInterpolationRule>
+                                        (interp_rule_);
 
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
@@ -142,6 +143,7 @@ int main(int argc, char *argv[])
    // SetPreconditioner *if* we are using hypre
    CGSolver solver(MPI_COMM_WORLD);
    solver.SetOperator(*A);
+   SparseMatrix* R = nullptr;
 
    // No preconditioner
    if (preconditioner == 0)
@@ -161,7 +163,9 @@ int main(int argc, char *argv[])
       cout << "Setting up preconditioner (LOR AMG) ... " << endl;
 
       // Create the LOR mesh
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
+      const int vdim = fespace.GetVDim();
+      R = new SparseMatrix(mesh.NURBSext->GetNDof(), mesh.NURBSext->GetNDof());
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, R);
 
       // Write low order mesh to file
       if (visualization)
@@ -209,6 +213,11 @@ int main(int argc, char *argv[])
          lo_Amat
       );
       HypreBoomerAMG *lo_P = new HypreBoomerAMG(*lo_A_hypre);
+
+      // R is defined as the inverse of the HO->LO interpolation matrix
+      // SparseMatrix R = mesh.GetNURBSInterpolationMatrix(lo_mesh, vdim);
+      // R.Inve
+
 
       // Use low-order AMG as preconditioner for high-order problem
       solver.SetPreconditioner(*lo_P);
@@ -296,6 +305,9 @@ int main(int argc, char *argv[])
       sol_ofs.precision(16);
       x.Save(sol_ofs);
    }
+
+   // 15. Free the used memory.
+   delete R;
 
    return 0;
 }
