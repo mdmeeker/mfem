@@ -14,6 +14,17 @@ real_t AzimuthalECoefficient::Eval(ElementTransformation &T,
    return val/r;
 }
 
+real_t ParallelECoefficient::Eval(ElementTransformation &T,
+                                   const IntegrationPoint &ip)
+{
+   Vector X, E;
+   vgf->GetVectorValue(T,ip,E);
+   T.Transform(ip, X);
+   Vector b;
+   ComputeB(X, b);
+   return E*b;
+}
+
 EpsilonMatrixCoefficient::EpsilonMatrixCoefficient(const char * filename,
                                                    Mesh * mesh_, ParMesh * pmesh_,
                                                    real_t scale)
@@ -87,4 +98,123 @@ EpsilonMatrixCoefficient::~EpsilonMatrixCoefficient()
       delete pgfs[i];
    }
    pgfs.DeleteAll();
+}
+
+DielectricTensorComponentCoefficient::DielectricTensorComponentCoefficient(
+                                       real_t delta_, real_t a0_, real_t a1_,
+                                       int row_, int col_,
+                                       bool use_imag_)
+      : delta(delta_), a0(a0_), a1(a1_), row(row_), col(col_), use_imag(use_imag_) { }
+
+
+real_t DielectricTensorComponentCoefficient::Eval(ElementTransformation &T, const IntegrationPoint &ip)
+{
+   Vector x;
+   T.Transform(ip, x);
+   return use_imag ? ComputeImagPart(x) : ComputeRealPart(x);
+}
+
+real_t DielectricTensorComponentCoefficient::ComputeRealPart(const Vector &x) 
+{
+   Vector b;
+   ComputeB(x, b);
+
+   real_t r = std::sqrt(x(0)*x(0) + x(1)*x(1));
+   real_t S = 1.0;
+   real_t P = a0 + a1 * (r - 0.9);
+
+   real_t bb_ij = b(row) * b(col);
+   return S * (row == col) + (P - S) * bb_ij;
+}
+
+real_t DielectricTensorComponentCoefficient::ComputeImagPart(const Vector &x) 
+{
+   return (row == col) ? delta : 0.0;
+}
+
+void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh, int order, bool paraview, const char *name) 
+{
+   MFEM_VERIFY(pmesh != nullptr, "ParMesh pointer must not be null.");
+   int dim = mc.GetVDim();
+
+   mfem::out << "Visualizing matrix coefficient with dimension: " << dim << endl;
+   mfem::out << "order = " << order << endl;
+   mfem::out << "pmesh dimension = " << pmesh->Dimension() << endl;
+
+   auto fec = new H1_FECollection(order, pmesh->Dimension());
+   auto pfes = new ParFiniteElementSpace(pmesh, fec);
+
+   Array<ParGridFunction *> pgfs(dim * dim);
+
+   Array<GridFunctionCoefficient *> gf_cfs(dim * dim);
+   ParaViewDataCollection * pvdc = nullptr;
+   std::ostringstream label;
+   if (name)
+   {
+      label << name;
+   }
+   else
+   {
+      label << "eps";
+   }
+   if (paraview)
+   {
+      pvdc = new ParaViewDataCollection(label.str(), pmesh);
+      pvdc->SetPrefixPath("ParaView");
+      pvdc->SetLevelsOfDetail(order);
+      pvdc->SetCycle(0);
+      pvdc->SetDataFormat(VTKFormat::BINARY);
+   }   
+   for (int i = 0; i < dim; ++i)
+   {
+      for (int j = 0; j < dim; ++j)
+      {
+         Coefficient *c_ij = mc.GetCoeff(i, j);
+         if (!c_ij) { continue; }
+
+         pgfs[i*dim + j] = new ParGridFunction(pfes);
+         *pgfs[i*dim + j] = 0.0;
+         pgfs[i*dim + j]->ProjectCoefficient(*c_ij);
+
+         mfem::out << "Visualizing component (" << i << "," << j << ")" << endl;
+         // mfem::out << "GridFunction size: " << gf->Size() << endl;
+         // gf->Print(mfem::out);
+
+         char vishost[] = "localhost";
+         int  visport   = 19916;
+         socketstream sol_sock(vishost, visport);
+
+         sol_sock << "parallel " << pmesh->GetNRanks() << " " << pmesh->GetMyRank() << "\n";
+         sol_sock << "solution\n" << * pmesh <<  *pgfs[i*dim + j];
+         sol_sock << "window_title '" << label.str() <<"_" << i << j << "'\n";
+         sol_sock << flush;
+
+         if (paraview)
+         {
+            pvdc->RegisterField(label.str() + std::to_string(i) + std::to_string(j), pgfs[i*dim + j]);
+         }
+      }
+   }
+   if (paraview)
+   {
+      pvdc->Save();
+      delete pvdc;
+      for (int i = 0; i < dim * dim; ++i)
+      {
+         delete pgfs[i];
+      }
+   }
+   delete pfes;
+   delete fec;      
+}
+
+void ComputeB(const Vector &x, Vector &b)
+{
+   real_t x0 = x(0), x1 = x(1);
+   real_t r = std::sqrt(x0 * x0 + x1 * x1);
+   int dim = x.Size();
+   b.SetSize(dim); b = 0.0;
+   b(0) = -x1 / r;
+   b(1) =  x0 / r;
+   if (dim == 3) b(2) = 0.0;
 }
