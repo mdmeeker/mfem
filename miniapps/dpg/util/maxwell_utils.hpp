@@ -66,7 +66,8 @@ public:
    /// @param row_      row index of the dielectric tensor
    /// @param col_      column index of the dielectric tensor
    /// @param use_imag_ If true, returns imaginary part; otherwise real part
-   DielectricTensorComponentCoefficient(real_t delta_, real_t a0_, real_t a1_, int row_, int col_, bool use_imag_ = false);
+   DielectricTensorComponentCoefficient(real_t delta_, real_t a0_, real_t a1_,
+                                        int row_, int col_, bool use_imag_ = false);
    real_t Eval(ElementTransformation &T, const IntegrationPoint &ip);
 
 private:
@@ -74,6 +75,7 @@ private:
    real_t ComputeImagPart(const Vector &x);
 };
 
-void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh, int order, bool paraview = false, const char *name = nullptr);
+void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
+                                     int order, bool paraview = false, const char *name = nullptr);
 
 void ComputeB(const Vector &x, Vector &b);

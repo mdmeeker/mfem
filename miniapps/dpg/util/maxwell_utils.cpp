@@ -15,7 +15,7 @@ real_t AzimuthalECoefficient::Eval(ElementTransformation &T,
 }
 
 real_t ParallelECoefficient::Eval(ElementTransformation &T,
-                                   const IntegrationPoint &ip)
+                                  const IntegrationPoint &ip)
 {
    Vector X, E;
    vgf->GetVectorValue(T,ip,E);
@@ -101,20 +101,21 @@ EpsilonMatrixCoefficient::~EpsilonMatrixCoefficient()
 }
 
 DielectricTensorComponentCoefficient::DielectricTensorComponentCoefficient(
-                                       real_t delta_, real_t a0_, real_t a1_,
-                                       int row_, int col_,
-                                       bool use_imag_)
-      : delta(delta_), a0(a0_), a1(a1_), row(row_), col(col_), use_imag(use_imag_) { }
+   real_t delta_, real_t a0_, real_t a1_,
+   int row_, int col_,
+   bool use_imag_)
+   : delta(delta_), a0(a0_), a1(a1_), row(row_), col(col_), use_imag(use_imag_) { }
 
 
-real_t DielectricTensorComponentCoefficient::Eval(ElementTransformation &T, const IntegrationPoint &ip)
+real_t DielectricTensorComponentCoefficient::Eval(ElementTransformation &T,
+                                                  const IntegrationPoint &ip)
 {
    Vector x;
    T.Transform(ip, x);
    return use_imag ? ComputeImagPart(x) : ComputeRealPart(x);
 }
 
-real_t DielectricTensorComponentCoefficient::ComputeRealPart(const Vector &x) 
+real_t DielectricTensorComponentCoefficient::ComputeRealPart(const Vector &x)
 {
    Vector b;
    ComputeB(x, b);
@@ -127,12 +128,13 @@ real_t DielectricTensorComponentCoefficient::ComputeRealPart(const Vector &x)
    return S * (row == col) + (P - S) * bb_ij;
 }
 
-real_t DielectricTensorComponentCoefficient::ComputeImagPart(const Vector &x) 
+real_t DielectricTensorComponentCoefficient::ComputeImagPart(const Vector &x)
 {
    return (row == col) ? delta : 0.0;
 }
 
-void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh, int order, bool paraview, const char *name) 
+void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
+                                     int order, bool paraview, const char *name)
 {
    MFEM_VERIFY(pmesh != nullptr, "ParMesh pointer must not be null.");
    int dim = mc.GetVDim();
@@ -164,7 +166,7 @@ void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
       pvdc->SetLevelsOfDetail(order);
       pvdc->SetCycle(0);
       pvdc->SetDataFormat(VTKFormat::BINARY);
-   }   
+   }
    for (int i = 0; i < dim; ++i)
    {
       for (int j = 0; j < dim; ++j)
@@ -184,14 +186,16 @@ void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
          int  visport   = 19916;
          socketstream sol_sock(vishost, visport);
 
-         sol_sock << "parallel " << pmesh->GetNRanks() << " " << pmesh->GetMyRank() << "\n";
+         sol_sock << "parallel " << pmesh->GetNRanks() << " " << pmesh->GetMyRank() <<
+                  "\n";
          sol_sock << "solution\n" << * pmesh <<  *pgfs[i*dim + j];
          sol_sock << "window_title '" << label.str() <<"_" << i << j << "'\n";
          sol_sock << flush;
 
          if (paraview)
          {
-            pvdc->RegisterField(label.str() + std::to_string(i) + std::to_string(j), pgfs[i*dim + j]);
+            pvdc->RegisterField(label.str() + std::to_string(i) + std::to_string(j),
+                                pgfs[i*dim + j]);
          }
       }
    }
@@ -205,7 +209,7 @@ void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
       }
    }
    delete pfes;
-   delete fec;      
+   delete fec;
 }
 
 void ComputeB(const Vector &x, Vector &b)
@@ -216,5 +220,5 @@ void ComputeB(const Vector &x, Vector &b)
    b.SetSize(dim); b = 0.0;
    b(0) = -x1 / r;
    b(1) =  x0 / r;
-   if (dim == 3) b(2) = 0.0;
+   if (dim == 3) { b(2) = 0.0; }
 }

@@ -79,7 +79,7 @@ public:
    /** The returned matrix has to be deleted by the caller. */
    void ParallelAssemble(BlockMatrix *mat_r, BlockMatrix *mat_i);
 
-   void FormLinearSystem(const Array<int> &ess_tdof_list, 
+   void FormLinearSystem(const Array<int> &ess_tdof_list,
                          Vector &x, Vector &b,
                          OperatorHandle &A,
                          Vector &X, Vector &B,

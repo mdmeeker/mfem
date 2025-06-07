@@ -1,13 +1,15 @@
-//                   MFEM Ultraweak DPG Maxwell parallel example
+//                   MFEM FEM parallel example
 //
+
+// Electron Landau Damping
 // Strong formulation:
-//      ∇×(1/μ₀ ∇×E) - ω² ϵ₀ ϵᵣ E - i ω²(Jₕ⁽¹⁾ + Jₕ⁽²⁾) = 0,   in Ω
+//      ∇×(1/μ₀ ∇×E) - ω² ϵ₀ ϵᵣ E - i ω²ϵ₀(Jₕ⁽¹⁾ + Jₕ⁽²⁾) = 0,   in Ω
 //                    - Δ∥ Jₕ⁽¹⁾ + c₁ Jₕ⁽¹⁾ - c₁ P(r) E∥ = 0,   in Ω     
 //                    - Δ∥ Jₕ⁽²⁾ + c₂ Jₕ⁽²⁾ + c₂ P(r) E∥ = 0,   in Ω 
 //                                                  E×n = E₀,  on ∂Ω
 // weak formulation:
 //   Find E ∈ H(curl,Ω), Jₕ⁽¹⁾ ∈ H¹(Ω), Jₕ⁽²⁾ ∈ H¹(Ω) such that
-//   (1/μ₀ ∇×E, ∇ × F) - ω² ϵ₀ (ϵᵣ E, F) - i ω²( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F) = 0,   ∀  F ∈ H(curl,Ω)
+//   (1/μ₀ ∇×E, ∇ × F) - ω² ϵ₀ (ϵᵣ E, F) - i ω²ϵ₀( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F) = 0,  ∀  F ∈ H(curl,Ω)
 //      (b ⊗ b ∇Jₕ⁽¹⁾ : ∇G) + c₁ (Jₕ⁽¹⁾, G) - c₁ (P(r) (b ⊗ b) E, G) = 0,  ∀ G ∈ (H¹(Ω))ᵈ 
 //      (b ⊗ b ∇Jₕ⁽²⁾ : ∇H) + c₂ (Jₕ⁽²⁾, H) + c₂ (P(r) (b ⊗ b) E, H) = 0,  ∀ H ∈ (H¹(Ω))ᵈ
 
@@ -85,7 +87,9 @@ int main(int argc, char *argv[])
    real_t rnum=1.5e9;
    real_t mu = 1.257e-6;
    real_t eps0 = 8.8541878128e-12;
-
+   bool eld = false; // enable/disable electron Landau damping 
+   real_t c1 = 25e6; 
+   real_t c2 = 1e6; 
    bool paraview = false;
 
    OptionsParser args(argc, argv);
@@ -99,9 +103,15 @@ int main(int argc, char *argv[])
                   "Number of wavelengths");
    args.AddOption(&mu, "-mu", "--permeability",
                   "Permeability of free space (or 1/(spring constant)).");
+   args.AddOption(&a0, "-a0", "--a0", "P(r) first parameter.");
+   args.AddOption(&a1, "-a1", "--a1", "P(r) second parameter.");
+   args.AddOption(&delta, "-delta", "--delta", "stability parameter.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
+   args.AddOption(&eld, "-eld", "--eld", "-no-eld",
+                  "--no-eld",
+                  "Enable or disable electron Landau damping.");
    args.AddOption(&paraview, "-paraview", "--paraview", "-no-paraview",
                   "--no-paraview",
                   "Enable or disable ParaView visualization.");
@@ -120,6 +130,7 @@ int main(int argc, char *argv[])
    }
 
    real_t omega = 2.*M_PI*rnum;
+   if (eld) delta = 0.0; // disable delta if electron Landau damping is enabled
 
    Mesh mesh(mesh_file, 1, 1);
    int dim = mesh.Dimension();
@@ -183,7 +194,6 @@ int main(int argc, char *argv[])
    PWMatrixCoefficient eps_cf_r(dim, attr, coefs_r);
    PWMatrixCoefficient eps_cf_i(dim, attr, coefs_i);
 
-
    for (int i = 0; i<par_ref_levels; i++)
    {
       pmesh.UniformRefinement();
@@ -191,8 +201,7 @@ int main(int argc, char *argv[])
       // eps_i_cf.Update();
    }
 
-   ScalarMatrixProductCoefficient eps0eps_r(eps0, eps_cf_r);
-   ScalarMatrixProductCoefficient eps0eps_i(eps0, eps_cf_i);
+   ConstantCoefficient negeps0omeg2(-eps0 * omega * omega);
 
    FiniteElementCollection *fec = new ND_FECollection(order, dim);
    ParFiniteElementSpace *E_fes = new ParFiniteElementSpace(&pmesh, fec);
@@ -201,52 +210,93 @@ int main(int argc, char *argv[])
    ConstantCoefficient one(1.0);
    ConstantCoefficient muinv(1./mu);
 
-   ScalarMatrixProductCoefficient m_cf_r(-omega*omega, eps0eps_r);
-   ScalarMatrixProductCoefficient m_cf_i(-omega*omega, eps0eps_i);
-
-
    Array<ParFiniteElementSpace *> pfes;
    pfes.Append(E_fes);
+   if (eld)
+   {
+      for (int i = 0; i < 2; ++i)
+      {
+         FiniteElementCollection *eld_fec = new H1_FECollection(order, dim);
+         ParFiniteElementSpace *eld_fes = new ParFiniteElementSpace(&pmesh, eld_fec, dim);
+         pfes.Append(eld_fes);
+      }
+   }
 
-   ParComplexLinearForm *b = new ParComplexLinearForm(E_fes);
-   b->Vector::operator=(0.0);
-
+   ScalarMatrixProductCoefficient m_cf_r(negeps0omeg2, eps_cf_r);
+   ScalarMatrixProductCoefficient m_cf_i(negeps0omeg2, eps_cf_i);
 
    ParComplexBlockForm *a = new ParComplexBlockForm(pfes);
+   // (1/μ₀ ∇×E, ∇ × F)
    a->AddDomainIntegrator(new CurlCurlIntegrator(muinv), nullptr, 0, 0);
+   // - ω² ϵ₀ (ϵᵣ E, F)
    a->AddDomainIntegrator(new VectorFEMassIntegrator(m_cf_r),
                           new VectorFEMassIntegrator(m_cf_i), 0, 0);
+   // if ELD
+   ConstantCoefficient c1_cf(c1);
+   ConstantCoefficient c2_cf(c2);
+   ScalarMatrixProductCoefficient negc1Prbb_cf(-c1, P_cf_bb_r);
+   ScalarMatrixProductCoefficient c2Prbb_cf(c2, P_cf_bb_r);
+   // ConstantCoefficient eps0omeg2(eps0 * omega * omega);
+
+   if (eld)
+   {
+      // - i ω²( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F)
+      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(negeps0omeg2)), 1, 0);
+      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(negeps0omeg2)), 2, 0);
+      // (b ⊗ b ∇Jₕ⁽¹⁾ : ∇G)
+      a->AddDomainIntegrator(new VectorDiffusionIntegrator(bb_cf),nullptr,1,1);
+      // c₁ (Jₕ⁽¹⁾, G)
+      a->AddDomainIntegrator(new VectorMassIntegrator(c1_cf), nullptr, 1, 1);
+      // - c₁ (P(r) (b ⊗ b) E, G)
+      a->AddDomainIntegrator(new VectorFEMassIntegrator(negc1Prbb_cf), nullptr, 0, 1);
+      //  (b ⊗ b ∇Jₕ⁽²⁾ : ∇H)
+      a->AddDomainIntegrator(new VectorDiffusionIntegrator(bb_cf), nullptr, 2, 2);
+      // c₂ (Jₕ⁽²⁾, H)
+      a->AddDomainIntegrator(new VectorMassIntegrator(c2_cf), nullptr, 2, 2);
+      // c₂ (P(r) (b ⊗ b) E, H)
+      a->AddDomainIntegrator(new VectorFEMassIntegrator(c2Prbb_cf), nullptr, 0, 2);
+   }
 
    socketstream E_out_r;
    socketstream E_theta_out_r;
    socketstream E_theta_out_i;
 
-   ParComplexGridFunction E_gf(E_fes);
-   E_gf.real() = 0.0;
-   E_gf.imag() = 0.0;
+   int npfes = pfes.Size();
+   Array<int> offsets(npfes+1);
+   offsets[0] = 0;
+   for (int i = 0; i<npfes; i++)
+   {
+      offsets[i+1] = pfes[i]->GetVSize();
+   }
+   offsets.PartialSum();
+
+   Vector x(2*offsets.Last());
+   x = 0.;
+
+   ParGridFunction E_gf_r(E_fes, x, 0); E_gf_r = 0.0;
+   ParGridFunction E_gf_i(E_fes, x, offsets.Last()); E_gf_i = 0.0;
+   ParGridFunction J_h1_r,J_h1_i,J_h2_r,J_h2_i;
+   if (eld)
+   {
+      J_h1_r.MakeRef(pfes[1], x, offsets[1]);
+      J_h1_i.MakeRef(pfes[1], x, offsets.Last() + offsets[1]);
+      J_h2_r.MakeRef(pfes[2], x, offsets[2]);
+      J_h2_i.MakeRef(pfes[2], x, offsets.Last() + offsets[2]); 
+   }
 
    L2_FECollection L2fec(order, dim);
    ParFiniteElementSpace L2_fes(&pmesh, &L2fec);
-
-   ParGridFunction E_theta_r(&L2_fes);
-   ParGridFunction E_theta_i(&L2_fes);
-   ParGridFunction E_theta(&L2_fes);
-   E_theta = 0.0;
-
    ParGridFunction E_par_r(&L2_fes);
    ParGridFunction E_par_i(&L2_fes);
 
    ParaViewDataCollection * paraview_dc = nullptr;
-   // ParaViewDataCollection * paraview_tdc = nullptr;
 
    std::string output_dir = "ParaView/FEM/" + GetTimestamp();
-   if (Mpi::Root())
-   {
-      WriteParametersToFile(args, output_dir);
-   }
+
 
    if (paraview)
    {
+      if (Mpi::Root()) { WriteParametersToFile(args, output_dir); }
       std::ostringstream paraview_file_name;
       std::string filename = GetFilename(mesh_file);
       paraview_file_name << filename
@@ -259,15 +309,22 @@ int main(int argc, char *argv[])
       paraview_dc->SetDataFormat(VTKFormat::BINARY);
       paraview_dc->SetHighOrderOutput(true);
       paraview_dc->SetTime(0.0); // set the time
-      paraview_dc->RegisterField("E_r",&E_gf.real());
-      paraview_dc->RegisterField("E_i",&E_gf.imag());
-      paraview_dc->RegisterField("E_theta_r",&E_theta_r);
-      paraview_dc->RegisterField("E_theta_i",&E_theta_i);
+      paraview_dc->RegisterField("E_r",&E_gf_r);
+      paraview_dc->RegisterField("E_i",&E_gf_i);
       paraview_dc->RegisterField("E_par_r",&E_par_r);
       paraview_dc->RegisterField("E_par_i",&E_par_i);
+      if (eld)
+      {
+         paraview_dc->RegisterField("Jh_1_r",&J_h1_r);
+         paraview_dc->RegisterField("Jh_1_i",&J_h1_i);
+         paraview_dc->RegisterField("Jh_2_r",&J_h2_r);
+         paraview_dc->RegisterField("Jh_2_i",&J_h2_i);
+      }
    }
 
    Array<int> ess_tdof_list;
+   Array<int> ess_tdof_listJ1;
+   Array<int> ess_tdof_listJ2;
    Array<int> ess_bdr;
    Array<int> one_r_bdr;
    Array<int> one_i_bdr;
@@ -289,6 +346,16 @@ int main(int argc, char *argv[])
       }
 
       E_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+      if (eld)
+      {
+         pfes[1]->GetEssentialTrueDofs(ess_bdr, ess_tdof_listJ1);
+         pfes[2]->GetEssentialTrueDofs(ess_bdr, ess_tdof_listJ2);
+         for (int i = 0; i < ess_tdof_listJ1.Size(); i++)
+         {
+            ess_tdof_listJ1[i] += pfes[0]->GetTrueVSize();
+            ess_tdof_listJ2[i] += pfes[0]->GetTrueVSize() + pfes[1]->GetTrueVSize();
+         }
+      }
       one_r_bdr = 0;  one_i_bdr = 0;
       negone_r_bdr = 0;  negone_i_bdr = 0;
 
@@ -302,6 +369,12 @@ int main(int argc, char *argv[])
       negone_i_bdr[18-1] = 1; negone_i_bdr[14-1] = 1;
    }
 
+   if (eld)
+   {
+      ess_tdof_list.Append(ess_tdof_listJ1);
+      ess_tdof_list.Append(ess_tdof_listJ2);
+   }
+
    Vector zero(dim); zero = 0.0;
    Vector one_x(dim); one_x = 0.0; one_x(0) = 1.0;
    Vector negone_x(dim); negone_x = 0.0; negone_x(0) = -1.0;
@@ -309,17 +382,18 @@ int main(int argc, char *argv[])
    VectorConstantCoefficient one_x_cf(one_x);
    VectorConstantCoefficient negone_x_cf(negone_x);
 
-   E_gf.ProjectBdrCoefficientTangent(one_x_cf,zero_vcf, one_r_bdr);
-   E_gf.ProjectBdrCoefficientTangent(negone_x_cf,zero_vcf, negone_r_bdr);
-   E_gf.ProjectBdrCoefficientTangent(zero_vcf,one_x_cf, one_i_bdr);
-   E_gf.ProjectBdrCoefficientTangent(zero_vcf,negone_x_cf, negone_i_bdr);
+   E_gf_r.ProjectBdrCoefficientTangent(one_x_cf, one_r_bdr);
+   E_gf_r.ProjectBdrCoefficientTangent(negone_x_cf, negone_r_bdr);
+   E_gf_i.ProjectBdrCoefficientTangent(one_x_cf, one_i_bdr);
+   E_gf_i.ProjectBdrCoefficientTangent(negone_x_cf, negone_i_bdr);
 
-   b->Assemble();
    a->Assemble();
 
    OperatorPtr Ah;
    Vector B, X;
-   a->FormLinearSystem(ess_tdof_list, E_gf, *b, Ah, X, B);
+
+   Vector b(x.Size()); b = 0.0;
+   a->FormLinearSystem(ess_tdof_list, x, b, Ah, X, B);
    
    ComplexOperator * Ahc = Ah.As<ComplexOperator>();
 
@@ -343,9 +417,13 @@ int main(int argc, char *argv[])
    ComplexHypreParMatrix * Ahc_hypre =
       new ComplexHypreParMatrix(Ahr, Ahi,false, false);
 
+   if (Mpi::Root())
+   {
+      mfem::out << "Assembly finished successfully." << endl;
+   }
+
 #ifdef MFEM_USE_MUMPS
    HypreParMatrix *A = Ahc_hypre->GetSystemMatrix();
-   // auto cpardiso = new CPardisoSolver(A->GetComm());
    auto solver = new MUMPSSolver(MPI_COMM_WORLD);
    solver->SetMatrixSymType(MUMPSSolver::MatType::UNSYMMETRIC);
    solver->SetPrintLevel(1);
@@ -357,15 +435,20 @@ int main(int argc, char *argv[])
    MFEM_ABORT("MFEM compiled without mumps");
 #endif
 
-   a->RecoverFEMSolution(X, E_gf);
+   a->RecoverFEMSolution(X, x);
 
-   AzimuthalECoefficient az_e_r(&E_gf.real());
-   AzimuthalECoefficient az_e_i(&E_gf.imag());
-   E_theta_r.ProjectCoefficient(az_e_r);
-   E_theta_i.ProjectCoefficient(az_e_i);
 
-   ParallelECoefficient par_e_r(&E_gf.real());
-   ParallelECoefficient par_e_i(&E_gf.imag());
+   E_gf_r.MakeRef(E_fes, x, 0); 
+   E_gf_i.MakeRef(E_fes, x, offsets.Last());
+   if (eld)
+   {
+      J_h1_r.MakeRef(pfes[1], x, offsets[1]);
+      J_h1_i.MakeRef(pfes[1], x, offsets.Last() + offsets[1]);
+      J_h2_r.MakeRef(pfes[2], x, offsets[2]);
+      J_h2_i.MakeRef(pfes[2], x, offsets.Last() + offsets[2]); 
+   }
+   ParallelECoefficient par_e_r(&E_gf_r);
+   ParallelECoefficient par_e_i(&E_gf_i);
    E_par_r.ProjectCoefficient(par_e_r);
    E_par_i.ProjectCoefficient(par_e_i);
 
@@ -374,10 +457,8 @@ int main(int argc, char *argv[])
       const char * keys = nullptr;
       char vishost[] = "localhost";
       int  visport   = 19916;
-      common::VisualizeField(E_out_r,vishost, visport, E_gf.real(),
+      common::VisualizeField(E_out_r,vishost, visport, E_gf_r,
                              "Numerical Electric field (real part)", 0, 0, 500, 500, keys);
-      common::VisualizeField(E_theta_out_r,vishost, visport, E_theta_r,
-                             "Numerical Electric field (azimuthal)", 0, 0, 500, 500, keys);
    }
 
    if (paraview)
@@ -386,23 +467,10 @@ int main(int argc, char *argv[])
       paraview_dc->SetTime((real_t)0);
       paraview_dc->Save();
       delete paraview_dc;
-
-      // int num_frames = 32;
-      // for (int i = 0; i<num_frames; i++)
-      // {
-      //    real_t t = (real_t)(i % num_frames) / num_frames;
-      //    add(cos(real_t(2.0*M_PI)*t), E_theta_r,
-      //        sin(real_t(2.0*M_PI)*t), E_theta_i, E_theta);
-      //    paraview_tdc->SetCycle(i);
-      //    paraview_tdc->SetTime(t);
-      //    paraview_tdc->Save();
-      // }
-      // delete paraview_tdc;
    }
 
 
    delete a;
-   delete b;
    delete E_fes;
    delete fec;
 

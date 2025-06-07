@@ -26,8 +26,8 @@ DPG_REAL_SEQ_SRC = util/weakform.cpp util/blockstaticcond.cpp util/utils.cpp
 DPG_REAL_PAR_SRC = $(DPG_REAL_SEQ_SRC) util/pweakform.cpp 
 DPG_REAL_OBJ = $(DPG_REAL_PAR_SRC:.cpp=.o)
 
-DPG_COMPLEX_SEQ_SRC = util/maxwell_utils.cpp util/utils.cpp util/complexweakform.cpp util/complexstaticcond.cpp util/pml.cpp
-DPG_COMPLEX_PAR_SRC = $(DPG_COMPLEX_SEQ_SRC) util/pcomplexweakform.cpp 
+DPG_COMPLEX_SEQ_SRC = util/maxwell_utils.cpp util/utils.cpp util/complexblockform.cpp util/complexweakform.cpp util/complexstaticcond.cpp util/pml.cpp
+DPG_COMPLEX_PAR_SRC = $(DPG_COMPLEX_SEQ_SRC) util/pcomplexweakform.cpp util/pcomplexblockform.cpp 
 DPG_COMPLEX_OBJ = $(DPG_COMPLEX_PAR_SRC:.cpp=.o)
 
 DIFFUSION_SRC = diffusion.cpp $(DPG_REAL_SEQ_SRC)
@@ -69,10 +69,13 @@ PMAXWELL_PRIMAL_OBJ = $(PMAXWELL_PRIMAL_SRC:.cpp=.o)
 PMAXWELL_UW_COUPLED_SRC = pmaxwell-coupled.cpp $(DPG_COMPLEX_PAR_SRC)
 PMAXWELL_UW_COUPLED_OBJ = $(PMAXWELL_UW_COUPLED_SRC:.cpp=.o)
 
+PMAXWELL_FEM_COUPLED_SRC = pmaxwell-coupled-fem.cpp $(DPG_COMPLEX_PAR_SRC)
+PMAXWELL_FEM_COUPLED_OBJ = $(PMAXWELL_FEM_COUPLED_SRC:.cpp=.o)
+
 SEQ_MINIAPPS = diffusion convection-diffusion acoustics maxwell
 PAR_MINIAPPS = pdiffusion pconvection-diffusion pacoustics pmaxwell  \
  pacoustics-primal pmaxwell-primal pdiffusion-primal pvectordiffusion-primal \
- pmaxwell-coupled 
+ pmaxwell-coupled pmaxwell-coupled-fem
 
 ifeq ($(MFEM_USE_MPI),NO)
    MINIAPPS = $(SEQ_MINIAPPS)
@@ -143,6 +146,8 @@ pmaxwell-primal-tokamak: $(PMAXWELL_PRIMAL_TOKAMAK_OBJ)
 pmaxwell-coupled: $(PMAXWELL_UW_COUPLED_OBJ)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $(PMAXWELL_UW_COUPLED_OBJ) $(COMMON_LIB) $(MFEM_LIBS)		
 
+pmaxwell-coupled-fem: $(PMAXWELL_FEM_COUPLED_OBJ)
+	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $(PMAXWELL_FEM_COUPLED_OBJ) $(COMMON_LIB) $(MFEM_LIBS)
 
 # Rule for building lib-common
 lib-common:

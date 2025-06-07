@@ -98,7 +98,7 @@ void ComplexBlockForm::AddDomainIntegrator(
                "ComplexBlockFrom::AddDomainIntegrator: fespace row index out of bounds");
    MFEM_VERIFY(m < fes.Size(),
                "ComplexBlockFrom::AddDomainIntegrator: fespace col index out of bounds");
-   if (bfi_r) { integs_r(n,m)->Append(bfi_r); } 
+   if (bfi_r) { integs_r(n,m)->Append(bfi_r); }
    if (bfi_i) { integs_i(n,m)->Append(bfi_i); }
 }
 
@@ -325,13 +325,13 @@ void ComplexBlockForm::Assemble(int skip_zeros)
 }
 
 void ComplexBlockForm::FormLinearSystem(const Array<int>
-                                          &ess_tdof_list,
-                                          Vector &x,
-                                          Vector &b,
-                                          OperatorHandle &A,
-                                          Vector &X,
-                                          Vector &B,
-                                          int copy_interior)
+                                        &ess_tdof_list,
+                                        Vector &x,
+                                        Vector &b,
+                                        OperatorHandle &A,
+                                        Vector &X,
+                                        Vector &B,
+                                        int copy_interior)
 {
    FormSystemMatrix(ess_tdof_list, A);
 
@@ -399,8 +399,8 @@ void ComplexBlockForm::FormLinearSystem(const Array<int>
 }
 
 void ComplexBlockForm::FormSystemMatrix(const Array<int>
-                                          &ess_tdof_list,
-                                          OperatorHandle &A)
+                                        &ess_tdof_list,
+                                        OperatorHandle &A)
 {
    if (!mat_e_r)
    {
@@ -436,7 +436,7 @@ void ComplexBlockForm::EliminateVDofsInRHS(
 }
 
 void ComplexBlockForm::EliminateVDofs(const Array<int> &vdofs,
-                                        Operator::DiagonalPolicy dpolicy)
+                                      Operator::DiagonalPolicy dpolicy)
 {
    if (mat_e_r == NULL)
    {
@@ -465,7 +465,7 @@ void ComplexBlockForm::EliminateVDofs(const Array<int> &vdofs,
 
 void ComplexBlockForm::RecoverFEMSolution(const Vector &X, Vector &x)
 {
-   if (!P) 
+   if (!P)
    {
       x.SyncMemory(X);
    }

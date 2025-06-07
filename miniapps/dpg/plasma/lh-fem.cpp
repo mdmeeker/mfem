@@ -39,12 +39,12 @@ int main(int argc, char *argv[])
    int order = 2;
    int par_ref_levels = 0;
    bool visualization = false;
-   // real_t rnum=4.6e9;
-   // real_t mu = 1.257e-6;
-   // real_t eps0 = 8.8541878128e-12*factor;
-   real_t rnum=1.5;
-   real_t mu = 1.257;
-   real_t eps0 = 8.8541878128;
+   real_t rnum=1.5e9;
+   real_t mu = 1.257e-6;
+   real_t eps0 = 8.8541878128e-12;
+   // real_t rnum=1.5;
+   // real_t mu = 1.257;
+   // real_t eps0 = 8.8541878128;
 
    bool paraview = false;
 

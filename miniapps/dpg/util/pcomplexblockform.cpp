@@ -17,7 +17,7 @@ namespace mfem
 {
 
 void ParComplexBlockForm::FillEssTdofLists(const Array<int> &
-                                             ess_tdof_list)
+                                           ess_tdof_list)
 {
    int j;
    for (int i = 0; i < ess_tdof_list.Size(); i++)
@@ -118,11 +118,11 @@ void ParComplexBlockForm::BuildProlongation()
 }
 
 void ParComplexBlockForm::FormLinearSystem(const Array<int>
-                                             &ess_tdof_list,
-                                             Vector &x, Vector &b,
-                                             OperatorHandle &A,
-                                             Vector &X, Vector &B,
-                                             int copy_interior)
+                                           &ess_tdof_list,
+                                           Vector &x, Vector &b,
+                                           OperatorHandle &A,
+                                           Vector &X, Vector &B,
+                                           int copy_interior)
 {
    FormSystemMatrix(ess_tdof_list, A);
 
@@ -178,8 +178,8 @@ void ParComplexBlockForm::FormLinearSystem(const Array<int>
 }
 
 void ParComplexBlockForm::FormSystemMatrix(const Array<int>
-                                             &ess_tdof_list,
-                                             OperatorHandle &A)
+                                           &ess_tdof_list,
+                                           OperatorHandle &A)
 {
    FillEssTdofLists(ess_tdof_list);
    if (mat_r)
@@ -201,7 +201,7 @@ void ParComplexBlockForm::FormSystemMatrix(const Array<int>
 }
 
 void ParComplexBlockForm::RecoverFEMSolution(const Vector &X,
-                                               Vector &x)
+                                             Vector &x)
 {
    int n = P->Height();
    int m = P->Width();
