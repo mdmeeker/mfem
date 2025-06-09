@@ -32,9 +32,11 @@ private:
 
 public:
    NURBSLORPreconditioner(
-      const ConstrainedOperator* R_,
-      // const Solver* R_,
-      const ConstrainedOperator* Rt_,
+      // const ConstrainedOperator* R_,
+      // const ConstrainedOperator* Rt_,
+      const Solver* R_,
+      const Solver* Rt_,
+      const Array<int> & ess_tdof_list, // TODO
       const HypreBoomerAMG* A_)
       : Solver(R_->Height(), R_->Width(), false)
    {
@@ -272,6 +274,7 @@ int main(int argc, char *argv[])
       R->SetOperator(*Rinv);
 
       SparseMatrix* Rinvt = Transpose(*Rinv);
+      Rinvt->Finalize();
       CGSolver* Rt = new CGSolver(MPI_COMM_WORLD);
       Rt->SetOperator(*Rinvt);
 
@@ -329,7 +332,7 @@ int main(int argc, char *argv[])
       ConstrainedOperator* Rc = new ConstrainedOperator(R, ess_tdof_list);
       ConstrainedOperator* Rtc = new ConstrainedOperator(Rt, ess_tdof_list);
       // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, lo_P);
-      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, Rtc, lo_P);
+      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, lo_P);
 
 
       // Use low-order AMG as preconditioner for high-order problem

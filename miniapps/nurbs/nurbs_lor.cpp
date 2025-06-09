@@ -12,9 +12,18 @@ using namespace mfem;
 
 int main(int argc, char *argv[])
 {
-   const int vdim = 3;
+   const int vdim = 1;
 
-   Mesh mesh("ho_mesh.mesh");
+   const char *mesh_file = "ho_mesh.mesh";
+   OptionsParser args(argc, argv);
+   args.AddOption(&mesh_file, "-m", "--mesh",
+                  "Mesh file to use.");
+   args.Parse();
+   // Print & verify options
+   args.PrintOptions(cout);
+
+   Mesh mesh(mesh_file, 1, 1);
+   // Mesh mesh("ho_mesh.mesh");
    // Mesh lo_mesh("lo_mesh.mesh");
 
    // Create a GridFunction on the HO mesh
@@ -28,7 +37,7 @@ int main(int argc, char *argv[])
    cout << "getndof: " << mesh.NURBSext->GetNDof() << endl;
 
    SparseMatrix* Rinv = new SparseMatrix(Ndof, Ndof);
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Uniform, vdim, Rinv);
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, Rinv);
    Rinv->Finalize();
    cout << "Finished creating low-order mesh." << endl;
    // I think, this is the most correct interpolation, but it may not be ideal
