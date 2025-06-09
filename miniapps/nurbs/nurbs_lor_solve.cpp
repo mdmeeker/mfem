@@ -32,11 +32,27 @@ private:
 
 public:
    NURBSLORPreconditioner(
-      // const ConstrainedOperator* R_,
-      // const ConstrainedOperator* Rt_,
+      const ConstrainedOperator* R_,
+      const ConstrainedOperator* Rt_,
+      // const Solver* R_,
+      // const Solver* Rt_,
+      // const Array<int> & ess_tdof_list, // TODO?
+      const HypreBoomerAMG* A_)
+      : Solver(R_->Height(), R_->Width(), false)
+   {
+      MFEM_VERIFY(R_->Height() == R_->Width(),
+                  "R must be a square matrix");
+      MFEM_VERIFY(A_->Height() == A_->Width(),
+                  "A must be a square matrix");
+      MFEM_VERIFY(R_->Height() == A_->Height(),
+                  "R and A must have the same dimensions");
+      R = R_;
+      Rt = Rt_;
+      A = A_;
+   }
+   NURBSLORPreconditioner(
       const Solver* R_,
       const Solver* Rt_,
-      const Array<int> & ess_tdof_list, // TODO
       const HypreBoomerAMG* A_)
       : Solver(R_->Height(), R_->Width(), false)
    {
@@ -140,7 +156,8 @@ int main(int argc, char *argv[])
 
    // 6. Determine the list of true (i.e. conforming) essential boundary dofs.
    Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
-   ess_bdr = 1;
+   ess_bdr = 0;
+   mesh.MarkExternalBoundaries(ess_bdr);
    fespace.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
    // 7. Define the solution vector x as a finite element grid function
@@ -217,7 +234,8 @@ int main(int argc, char *argv[])
       MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
 
       Array<int> lo_ess_tdof_list, lo_ess_bdr(lo_mesh.bdr_attributes.Max());
-      lo_ess_bdr = 1;
+      lo_ess_bdr = 0;
+      lo_mesh.MarkExternalBoundaries(lo_ess_bdr);
       lo_fespace.GetEssentialTrueDofs(lo_ess_bdr, lo_ess_tdof_list);
 
       GridFunction lo_x(&lo_fespace);
@@ -332,6 +350,7 @@ int main(int argc, char *argv[])
       ConstrainedOperator* Rc = new ConstrainedOperator(R, ess_tdof_list);
       ConstrainedOperator* Rtc = new ConstrainedOperator(Rt, ess_tdof_list);
       // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, lo_P);
+      // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, Rtc, lo_P);
       NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, lo_P);
 
 
