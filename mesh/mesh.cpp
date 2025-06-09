@@ -6366,19 +6366,23 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
    // 2e. Get transfer (HO -> LO) matrix
    if (R)
    {
-      const FiniteElementSpace fespace(*GetNodalFESpace());
+      // const FiniteElementSpace fespace(*GetNodalFESpace());
+      const FiniteElementCollection* fec = GetNodes()->OwnFEC();
+      const FiniteElementSpace fespace = FiniteElementSpace(this, fec, vdim,
+                                                   Ordering::byVDIM);
       Array<NURBSPatch*> ho_patches(NP);
       GetNURBSPatches(ho_patches);
-      Array<int> dofs;
       for (int p = 0; p < NP; p++)
       {
          int N = ho_patches[p]->GetNCP();
          SparseMatrix smat(N, N);
          ho_patches[p]->GetInterpolationMatrix(*lo_patches[p], smat);
+         Array<int> dofs;
          NURBSext->GetPatchDofs(p, dofs);
 
          // Set contributions in the global matrix - apply dof ordering
          Array<int> cols;
+         Array<int> vcols;
          Vector srow;
          for (int r=0; r<N; ++r)
          {
@@ -6388,11 +6392,18 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
             {
                cols[i] = dofs[cols[i]];
             }
-            fespace.DofsToVDofs(cols);
+            // mfem::out << "cols = " << endl;
+            // cols.Print(mfem::out, 20);
+
             for (int vd = 0; vd < vdim; vd++)
             {
+               vcols = cols;
+               fespace.DofsToVDofs(vd, vcols);
+               // mfem::out << "vdof cols = " << endl;
+               // vcols.Print(mfem::out, 20);
                int vdrow = fespace.DofToVDof(dofs[r], vd);
-               R->SetRow(vdrow, cols, srow);
+               R->SetRow(vdrow, vcols, srow);
+               // mfem::out << "row = " << vdrow << endl << endl;
             }
          }
       }

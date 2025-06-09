@@ -23,6 +23,40 @@ void SetPatchIntegrationRules(const Mesh &mesh,
                               const SplineIntegrationRule &splineRule,
                               BilinearFormIntegrator * bfi);
 
+class NURBSLORPreconditioner : public Solver
+{
+private:
+   const Operator* R; // transfer matrix from LO->HO
+   const Operator* A; // AMG on LO dofs
+
+public:
+   NURBSLORPreconditioner(const DenseMatrix* R_, const HypreBoomerAMG* A_)
+      : Solver(R_->Height(), R_->Width(), false)
+   {
+      MFEM_VERIFY(R_->Height() == R_->Width(),
+                  "R must be a square matrix");
+      MFEM_VERIFY(A_->Height() == A_->Width(),
+                  "A must be a square matrix");
+      MFEM_VERIFY(R_->Height() == A_->Height(),
+                  "R and A must have the same dimensions");
+      R = R_;
+      A = A_;
+   }
+
+   // y = P x = R * A^-1 * R^T
+   void Mult(const Vector &x, Vector &y) const
+   {
+      y = 0.0;
+      Vector z(R->Height());  // Temp vector
+      R->MultTranspose(x, y); // y = R^T x
+      A->Mult(y, z);          // z = A^-1 * R^T x
+      R->Mult(z, y);          // y = R * A^-1 * R^T x
+   }
+
+   void SetOperator(const Operator &op) { R = &op;};
+
+};
+
 
 int main(int argc, char *argv[])
 {
@@ -143,7 +177,7 @@ int main(int argc, char *argv[])
    // SetPreconditioner *if* we are using hypre
    CGSolver solver(MPI_COMM_WORLD);
    solver.SetOperator(*A);
-   SparseMatrix* R = nullptr;
+   SparseMatrix* Rinv = nullptr;
 
    // No preconditioner
    if (preconditioner == 0)
@@ -164,8 +198,16 @@ int main(int argc, char *argv[])
 
       // Create the LOR mesh
       const int vdim = fespace.GetVDim();
-      R = new SparseMatrix(mesh.NURBSext->GetNDof(), mesh.NURBSext->GetNDof());
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, R);
+      Rinv = new SparseMatrix(Ndof, Ndof);
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, Rinv);
+      Rinv->Finalize();
+      // I think, this is the most correct interpolation, but it may not be ideal
+      // for larger problems. Other options include
+      //   - Form the LO -> HO interpolation matrix instead
+      //   - Use a sparse factorization or iterative solve for R
+      // matrix?
+      DenseMatrix* R = Rinv->ToDenseMatrix();
+      R->Invert();
 
       // Write low order mesh to file
       if (visualization)
@@ -214,13 +256,18 @@ int main(int argc, char *argv[])
       );
       HypreBoomerAMG *lo_P = new HypreBoomerAMG(*lo_A_hypre);
 
-      // R is defined as the inverse of the HO->LO interpolation matrix
       // SparseMatrix R = mesh.GetNURBSInterpolationMatrix(lo_mesh, vdim);
-      // R.Inve
+
+      // DenseMatrix* Rt = new DenseMatrix(*R);
+      // Rt->Transpose();
+      // TripleProductOperator* P = new TripleProductOperator(Rt, lo_P, R, false, false, false);
+      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, lo_P);
 
 
       // Use low-order AMG as preconditioner for high-order problem
-      solver.SetPreconditioner(*lo_P);
+      // solver.SetPreconditioner(*lo_P);
+      solver.SetPreconditioner(*P);
+
    }
    else
    {
@@ -307,7 +354,7 @@ int main(int argc, char *argv[])
    }
 
    // 15. Free the used memory.
-   delete R;
+   // delete R;
 
    return 0;
 }
