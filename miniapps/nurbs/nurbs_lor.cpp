@@ -38,9 +38,9 @@ int main(int argc, char *argv[])
    // matrix?
    // Another optimization here would be to invert the vdim==1 matrix and
    // construct the R matrix from that.
-   DenseMatrix* R = Rinv->ToDenseMatrix();
+   // DenseMatrix* R = Rinv->ToDenseMatrix();
    // R->PrintMatlab();
-   R->Invert();
+   // R->Invert();
 
    GridFunction x(&fespace);
    x = 0.0;
@@ -60,10 +60,6 @@ int main(int argc, char *argv[])
    cout << "Finished creating low-order grid function." << endl;
 
 
-   // Apply LO -> HO interpolation matrix
-   GridFunction x_recon(&lo_fespace);
-   R->AddMult(lo_x, x_recon);
-   cout << "Finished applying LO -> HO matrix." << endl;
 
    // ----- Write to file -----
    ofstream x_ofs("x.gf");
@@ -74,9 +70,13 @@ int main(int argc, char *argv[])
    lo_x_ofs.precision(16);
    lo_x.Save(lo_x_ofs);
 
-   ofstream x_recon_ofs("x_recon.gf");
-   x_recon_ofs.precision(16);
-   x_recon.Save(x_recon_ofs);
+   // Apply LO -> HO interpolation matrix
+   // GridFunction x_recon(&lo_fespace);
+   // R->AddMult(lo_x, x_recon);
+   // cout << "Finished applying LO -> HO matrix." << endl;
+   // ofstream x_recon_ofs("x_recon.gf");
+   // x_recon_ofs.precision(16);
+   // x_recon.Save(x_recon_ofs);
 
    // ----- Test GetInterpolationMatrix -----
    // Build a patch from scratch

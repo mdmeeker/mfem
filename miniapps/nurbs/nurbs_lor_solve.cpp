@@ -8,7 +8,7 @@
 //               different preconditioners and records some stats.
 //               Preconditioner (-pc) choices:
 //                 - 0: No PC
-//                 - 1: Jacobi
+//                 - 1: LOR AMG (R = Identity)
 //                 - 2: LOR AMG (choose interpolation with -interp)
 //
 
@@ -27,10 +27,15 @@ class NURBSLORPreconditioner : public Solver
 {
 private:
    const Operator* R; // transfer matrix from LO->HO
+   const Operator* Rt; // transfer matrix from HO->LO (dual)
    const Operator* A; // AMG on LO dofs
 
 public:
-   NURBSLORPreconditioner(const DenseMatrix* R_, const HypreBoomerAMG* A_)
+   NURBSLORPreconditioner(
+      const ConstrainedOperator* R_,
+      // const Solver* R_,
+      const ConstrainedOperator* Rt_,
+      const HypreBoomerAMG* A_)
       : Solver(R_->Height(), R_->Width(), false)
    {
       MFEM_VERIFY(R_->Height() == R_->Width(),
@@ -40,15 +45,17 @@ public:
       MFEM_VERIFY(R_->Height() == A_->Height(),
                   "R and A must have the same dimensions");
       R = R_;
+      Rt = Rt_;
       A = A_;
    }
 
-   // y = P x = R * A^-1 * R^T
+   // y = P x = R A^-1 R^T x
    void Mult(const Vector &x, Vector &y) const
    {
       y = 0.0;
       Vector z(R->Height());  // Temp vector
-      R->MultTranspose(x, y); // y = R^T x
+      // R->MultTranspose(x, y); // y = R^T x
+      Rt->Mult(x, y); // y = R^T x
       A->Mult(y, z);          // z = A^-1 * R^T x
       R->Mult(z, y);          // y = R * A^-1 * R^T x
    }
@@ -184,30 +191,14 @@ int main(int argc, char *argv[])
    {
       cout << "No preconditioner set ... " << endl;
    }
-   // Jacobi
+   // LOR AMG - R = Identity
    else if (preconditioner == 1)
    {
-      cout << "Setting up preconditioner (Jacobi) ... " << endl;
-      OperatorJacobiSmoother *P = new OperatorJacobiSmoother(a, ess_tdof_list);
-      solver.SetPreconditioner(*P);
-   }
-   // LOR AMG
-   else if (preconditioner == 2)
-   {
-      cout << "Setting up preconditioner (LOR AMG) ... " << endl;
+      cout << "Setting up preconditioner (LOR AMG - R = Identity) ... " << endl;
 
       // Create the LOR mesh
       const int vdim = fespace.GetVDim();
-      Rinv = new SparseMatrix(Ndof, Ndof);
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, Rinv);
-      Rinv->Finalize();
-      // I think, this is the most correct interpolation, but it may not be ideal
-      // for larger problems. Other options include
-      //   - Form the LO -> HO interpolation matrix instead
-      //   - Use a sparse factorization or iterative solve for R
-      // matrix?
-      DenseMatrix* R = Rinv->ToDenseMatrix();
-      R->Invert();
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
 
       // Write low order mesh to file
       if (visualization)
@@ -235,6 +226,83 @@ int main(int argc, char *argv[])
       lo_b.Assemble();
 
       DiffusionIntegrator *lo_di = new DiffusionIntegrator(one);
+
+      // Set up problem
+      BilinearForm lo_a(&lo_fespace);
+      lo_a.AddDomainIntegrator(lo_di);
+      lo_a.Assemble();
+
+      // Define linear system
+      OperatorPtr lo_A;
+      Vector lo_B, lo_X;
+      lo_a.FormLinearSystem(lo_ess_tdof_list, lo_x, lo_b, lo_A, lo_X, lo_B);
+
+      // Set up HypreBoomerAMG on the low-order problem
+      HYPRE_BigInt row_starts[2] = {0, (int)Ndof};
+      SparseMatrix *lo_Amat = new SparseMatrix(lo_a.SpMat());
+      HypreParMatrix *lo_A_hypre = new HypreParMatrix(
+         MPI_COMM_WORLD,
+         HYPRE_BigInt((int)Ndof),
+         row_starts,
+         lo_Amat
+      );
+      HypreBoomerAMG *lo_P = new HypreBoomerAMG(*lo_A_hypre);
+
+      // Use low-order AMG as preconditioner for high-order problem
+      solver.SetPreconditioner(*lo_P);
+   }
+   // LOR AMG
+   else if (preconditioner == 2)
+   {
+      cout << "Setting up preconditioner (LOR AMG) ... " << endl;
+
+      // Create the LOR mesh
+      const int vdim = fespace.GetVDim();
+      Rinv = new SparseMatrix(Ndof, Ndof);
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, Rinv);
+      Rinv->Finalize();
+      // I think, this is the most correct interpolation, but it may not be ideal
+      // for larger problems. Other options include
+      //   - Form the LO -> HO interpolation matrix instead
+      //   - Use a sparse factorization or iterative solve for R
+      // matrix?
+      // DenseMatrix* R = Rinv->ToDenseMatrix();
+      // R->Invert();
+      CGSolver* R = new CGSolver(MPI_COMM_WORLD);
+      R->SetOperator(*Rinv);
+
+      SparseMatrix* Rinvt = Transpose(*Rinv);
+      CGSolver* Rt = new CGSolver(MPI_COMM_WORLD);
+      Rt->SetOperator(*Rinvt);
+
+
+      // Write low order mesh to file
+      if (visualization)
+      {
+         ofstream ofs("lo_mesh.mesh");
+         ofs.precision(8);
+         lo_mesh.Print(ofs);
+      }
+
+      FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
+      cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
+      FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec);
+      const long lo_Ndof = lo_fespace.GetTrueVSize();
+      MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
+
+      Array<int> lo_ess_tdof_list, lo_ess_bdr(lo_mesh.bdr_attributes.Max());
+      lo_ess_bdr = 1;
+      lo_fespace.GetEssentialTrueDofs(lo_ess_bdr, lo_ess_tdof_list);
+
+      GridFunction lo_x(&lo_fespace);
+      lo_x = 0.0;
+
+      LinearForm lo_b(&lo_fespace);
+      lo_b.AddDomainIntegrator(new DomainLFIntegrator(one));
+      lo_b.Assemble();
+
+      DiffusionIntegrator *lo_di = new DiffusionIntegrator(one);
+
       // Set up problem
       BilinearForm lo_a(&lo_fespace);
       lo_a.AddDomainIntegrator(lo_di);
@@ -258,10 +326,10 @@ int main(int argc, char *argv[])
 
       // SparseMatrix R = mesh.GetNURBSInterpolationMatrix(lo_mesh, vdim);
 
-      // DenseMatrix* Rt = new DenseMatrix(*R);
-      // Rt->Transpose();
-      // TripleProductOperator* P = new TripleProductOperator(Rt, lo_P, R, false, false, false);
-      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, lo_P);
+      ConstrainedOperator* Rc = new ConstrainedOperator(R, ess_tdof_list);
+      ConstrainedOperator* Rtc = new ConstrainedOperator(Rt, ess_tdof_list);
+      // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, lo_P);
+      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, Rtc, lo_P);
 
 
       // Use low-order AMG as preconditioner for high-order problem
