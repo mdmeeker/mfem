@@ -79,3 +79,22 @@ void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
                                      int order, bool paraview = false, const char *name = nullptr);
 
 void ComputeB(const Vector &x, Vector &b);
+
+// Integrator for (vq·∇) u · (vq·∇) v where u,v ∈ (H¹(Ω))ᵈ    
+class DirectionalDiffusionIntegrator : public BilinearFormIntegrator
+{
+private:
+   VectorCoefficient *VQ; 
+
+public:
+   DirectionalDiffusionIntegrator(VectorCoefficient &q) : VQ(&q) { }
+
+   virtual void AssembleElementMatrix(const FiniteElement &el,
+                                      ElementTransformation &Trans,
+                                      DenseMatrix &elmat);
+   virtual void AssembleElementMatrix2(const FiniteElement &tr_el,
+                                       const FiniteElement &te_el,
+                                       ElementTransformation &Trans,
+                                       DenseMatrix &elmat);
+
+};

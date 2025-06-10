@@ -222,3 +222,143 @@ void ComputeB(const Vector &x, Vector &b)
    b(1) =  x0 / r;
    if (dim == 3) { b(2) = 0.0; }
 }
+
+
+void DirectionalDiffusionIntegrator::AssembleElementMatrix(
+   const FiniteElement &el,
+   ElementTransformation &Trans,
+   DenseMatrix &elmat)
+{
+   int dof = el.GetDof();
+   int dim = el.GetDim();
+   int vdim = Trans.GetSpaceDim();
+
+   elmat.SetSize(dof * vdim, dof * vdim);
+   elmat = 0.0;
+
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      int order = 2 * el.GetOrder() - 2; // Integration order
+      ir = &IntRules.Get(el.GetGeomType(), order);
+   }
+
+   // Get shape functions and their derivatives
+   DenseMatrix dshape(dof, dim);
+   Vector vec(dim);
+
+   for (int i = 0; i < ir->GetNPoints(); i++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(i);
+      Trans.SetIntPoint(&ip);
+      double w = ip.weight * Trans.Weight();
+      VQ->Eval(vec, Trans, ip);
+      el.CalcPhysDShape(Trans, dshape);
+
+      // Compute (vq·∇)φ for each basis function
+      Vector vq_grad_phi(dof); vq_grad_phi = 0.0;
+      for (int j = 0; j < dof; j++)
+      {
+         for (int d = 0; d < dim; d++)
+         {
+            vq_grad_phi(j) += vec(d) * dshape(j, d);
+         }
+      }
+
+      for (int comp_i = 0; comp_i < vdim; comp_i++)
+      {
+         for (int comp_j = 0; comp_j < vdim; comp_j++)
+         {
+            if (comp_i == comp_j) 
+            {
+               for (int j = 0; j < dof; j++)
+               {
+                  for (int i = 0; i < dof; i++)
+                  {
+                     int jj = j + comp_i * dof;
+                     int ii = i + comp_j * dof;
+                     elmat(jj, ii) += w * vq_grad_phi(j) 
+                                        * vq_grad_phi(i);
+                  }
+               }
+            }
+         }
+      }
+   }
+}
+
+void DirectionalDiffusionIntegrator::AssembleElementMatrix2(
+   const FiniteElement &trial_fe, const FiniteElement &test_fe,
+   ElementTransformation &Trans,
+   DenseMatrix &elmat)
+{
+   int trial_dof = trial_fe.GetDof();
+   int test_dof = test_fe.GetDof();
+   int dim = trial_fe.GetDim();
+   int vdim = Trans.GetSpaceDim();
+
+   elmat.SetSize(test_dof * vdim, trial_dof * vdim);
+   elmat = 0.0;
+
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      int order = trial_fe.GetOrder() + test_fe.GetOrder() + Trans.OrderW() - 1;
+      ir = &IntRules.Get(trial_fe.GetGeomType(), order);
+   }
+
+   Vector vec(dim);
+   DenseMatrix trial_dshape(trial_dof, dim);
+   DenseMatrix test_dshape(test_dof, dim);
+
+   for (int i = 0; i < ir->GetNPoints(); i++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(i);
+      Trans.SetIntPoint(&ip);
+      double w = ip.weight * Trans.Weight();
+      VQ->Eval(vec, Trans, ip);
+      trial_fe.CalcPhysDShape(Trans, trial_dshape);
+      test_fe.CalcPhysDShape(Trans, test_dshape);
+
+      // Compute (vq·∇)φ for each basis function
+      Vector vq_grad_phi_trial(trial_dof); vq_grad_phi_trial = 0.0;
+      for (int j = 0; j < trial_dof; j++)
+      {
+         for (int d = 0; d < dim; d++)
+         {
+            vq_grad_phi_trial(j) += vec(d) * trial_dshape(j, d);
+         }
+      }
+
+      Vector vq_grad_phi_test(trial_dof); vq_grad_phi_test = 0.0;
+      for (int j = 0; j < test_dof; j++)
+      {
+         for (int d = 0; d < dim; d++)
+         {
+            vq_grad_phi_test(j) += vec(d) * test_dshape(j, d);
+         }
+      }
+
+      for (int trial_comp = 0; trial_comp < vdim; trial_comp++)
+      {
+         for (int test_comp = 0; test_comp < vdim; test_comp++)
+         {
+            if (trial_comp == test_comp)
+            {
+               for (int j = 0; j < test_dof; j++)
+               {
+                  for (int i = 0; i < trial_dof; i++)
+                  {
+                     int jj = j + test_comp * test_dof;
+                     int ii = i + trial_comp * trial_dof;
+                     elmat(jj, ii) += w * vq_grad_phi_test(j)
+                                        * vq_grad_phi_trial(i);
+                  }
+               }
+            }
+         }
+      }
+
+
+   }
+}

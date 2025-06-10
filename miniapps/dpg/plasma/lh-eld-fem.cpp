@@ -9,9 +9,9 @@
 //                                                  E×n = E₀,  on ∂Ω
 // weak formulation:
 //   Find E ∈ H(curl,Ω), Jₕ⁽¹⁾ ∈ H¹(Ω), Jₕ⁽²⁾ ∈ H¹(Ω) such that
-//   (1/μ₀ ∇×E, ∇ × F) - ω² ϵ₀ (ϵᵣ E, F) - i ω²ϵ₀( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F) = 0,  ∀  F ∈ H(curl,Ω)
-//      (b ⊗ b ∇Jₕ⁽¹⁾ : ∇G) + c₁ (Jₕ⁽¹⁾, G) - c₁ (P(r) (b ⊗ b) E, G) = 0,  ∀ G ∈ (H¹(Ω))ᵈ 
-//      (b ⊗ b ∇Jₕ⁽²⁾ : ∇H) + c₂ (Jₕ⁽²⁾, H) + c₂ (P(r) (b ⊗ b) E, H) = 0,  ∀ H ∈ (H¹(Ω))ᵈ
+//   (1/μ₀ ∇×E, ∇ × F) - ω² ϵ₀ (ϵᵣ E, F) + i ω²ϵ₀( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F) = 0,  ∀ F ∈ H(curl,Ω)
+//        ( (b⋅∇)Jₕ⁽¹⁾, (b⋅∇) G) + c₁ (Jₕ⁽¹⁾, G) - c₁ (P(r) (b ⊗ b) E, G) = 0,  ∀ G ∈ (H¹(Ω))ᵈ 
+//        ( (b⋅∇)Jₕ⁽²⁾, (b⋅∇) H) + c₂ (Jₕ⁽²⁾, H) + c₂ (P(r) (b ⊗ b) E, H) = 0,  ∀ H ∈ (H¹(Ω))ᵈ
 
 #include "mfem.hpp"
 #include "../util/pcomplexweakform.hpp"
@@ -26,6 +26,7 @@
 
 using namespace std;
 using namespace mfem;
+
 
 real_t delta = 0.01; 
 real_t a0 = -1.0;    
@@ -80,6 +81,7 @@ int main(int argc, char *argv[])
 
    int order = 2;
    int par_ref_levels = 0;
+   int ser_ref_levels = 0;
    bool visualization = false;
    // real_t rnum=4.6e9;
    // real_t mu = 1.257e-6;
@@ -91,12 +93,16 @@ int main(int argc, char *argv[])
    real_t c1 = 25e6; 
    real_t c2 = 1e6; 
    bool paraview = false;
+   bool debug = false;
+
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
    args.AddOption(&order, "-o", "--order",
                   "Finite element order (polynomial degree)");
+   args.AddOption(&ser_ref_levels, "-sr", "--serial-refinement_levels",
+                  "Number of serial refinement levels.");                  
    args.AddOption(&par_ref_levels, "-pr", "--parallel-refinement_levels",
                   "Number of parallel refinement levels.");
    args.AddOption(&rnum, "-rnum", "--number_of_wavelenths",
@@ -115,6 +121,10 @@ int main(int argc, char *argv[])
    args.AddOption(&paraview, "-paraview", "--paraview", "-no-paraview",
                   "--no-paraview",
                   "Enable or disable ParaView visualization.");
+
+   args.AddOption(&debug, "-debug", "--debug", "-no-debug",
+                  "--no-debug",
+                  "Enable or disable debug mode (delta = 0.01 and no coupling).");                  
    args.Parse();
    if (!args.Good())
    {
@@ -130,10 +140,18 @@ int main(int argc, char *argv[])
    }
 
    real_t omega = 2.*M_PI*rnum;
-   if (eld) delta = 0.0; // disable delta if electron Landau damping is enabled
-
+   if (eld & !debug) 
+   {
+      delta = 0.0; // disable delta if electron Landau damping is enabled
+   }   
    Mesh mesh(mesh_file, 1, 1);
    int dim = mesh.Dimension();
+
+   for (int i = 0; i < ser_ref_levels; i++)
+   {
+      mesh.UniformRefinement();
+   }
+
 
    Array<int> int_bdr_attr;
    for (int i = 0; i < mesh.GetNBE(); i++)
@@ -177,7 +195,20 @@ int main(int argc, char *argv[])
    FunctionCoefficient P_cf_r(pfunc_r);
    FunctionCoefficient P_cf_i(pfunc_i);
 
-   MatrixFunctionCoefficient bb_cf(dim,bcrossb);
+   MatrixFunctionCoefficient pw_bb_cf(dim,bcrossb);
+   // MatrixFunctionCoefficient bb_cf(dim,bcrossb);
+
+   Array<MatrixCoefficient*> diff_coeff(nattr);
+   for (int i = 0; i < nattr-1; ++i)
+   {
+      diff_coeff[i] = &Mone_cf;
+   }
+   diff_coeff[nattr-1] = &pw_bb_cf;
+
+   PWMatrixCoefficient bb_cf(dim,attr, diff_coeff);
+
+   VectorFunctionCoefficient b_cf(dim,bfunc);
+
    MatrixSumCoefficient oneminusbb(Mone_cf, bb_cf, 1.0, -1.0);
    ScalarMatrixProductCoefficient Soneminusbb_r(S_cf_r, oneminusbb);
    ScalarMatrixProductCoefficient Soneminusbb_i(S_cf_i, oneminusbb);
@@ -194,11 +225,10 @@ int main(int argc, char *argv[])
    PWMatrixCoefficient eps_cf_r(dim, attr, coefs_r);
    PWMatrixCoefficient eps_cf_i(dim, attr, coefs_i);
 
+
    for (int i = 0; i<par_ref_levels; i++)
    {
       pmesh.UniformRefinement();
-      // eps_r_cf.Update();
-      // eps_i_cf.Update();
    }
 
    ConstantCoefficient negeps0omeg2(-eps0 * omega * omega);
@@ -222,6 +252,22 @@ int main(int argc, char *argv[])
       }
    }
 
+   Array<HYPRE_BigInt> tdofs(pfes.Size());
+   for (int i = 0; i < pfes.Size(); ++i)
+   {
+      tdofs[i] = pfes[i]->GlobalTrueVSize();
+      if (Mpi::Root())
+      {
+         cout << "ParFiniteElementSpace " << i << " has " << tdofs[i]
+              << " true dofs." << endl;
+      }
+   }
+   if (Mpi::Root())
+   {
+      cout << "Total number of true dofs: " << tdofs.Sum() << endl;
+   }
+
+
    ScalarMatrixProductCoefficient m_cf_r(negeps0omeg2, eps_cf_r);
    ScalarMatrixProductCoefficient m_cf_i(negeps0omeg2, eps_cf_i);
 
@@ -232,29 +278,53 @@ int main(int argc, char *argv[])
    a->AddDomainIntegrator(new VectorFEMassIntegrator(m_cf_r),
                           new VectorFEMassIntegrator(m_cf_i), 0, 0);
    // if ELD
+
+   Array<Coefficient*> c1_coeffs(nattr);
+   Array<Coefficient*> c2_coeffs(nattr);
+   for (int i = 0; i < nattr-1; ++i)
+   {
+      c1_coeffs[i] = &zero_cf;
+      c2_coeffs[i] = &zero_cf;
+   }
    ConstantCoefficient c1_cf(c1);
    ConstantCoefficient c2_cf(c2);
-   ScalarMatrixProductCoefficient negc1Prbb_cf(-c1, P_cf_bb_r);
-   ScalarMatrixProductCoefficient c2Prbb_cf(c2, P_cf_bb_r);
-   // ConstantCoefficient eps0omeg2(eps0 * omega * omega);
+   c1_coeffs[nattr-1] = &c1_cf;
+   c2_coeffs[nattr-1] = &c2_cf;
+
+   PWCoefficient pw_c1_cf(attr, c1_coeffs);
+   PWCoefficient pw_c2_cf(attr, c2_coeffs);
+
+
+   ScalarMatrixProductCoefficient c1Prbb_cf(pw_c1_cf, P_cf_bb_r);
+   ScalarMatrixProductCoefficient negc1Prbb_cf(-1.0, c1Prbb_cf);
+   ScalarMatrixProductCoefficient c2Prbb_cf(pw_c2_cf, P_cf_bb_r);
+
+   ScalarMatrixProductCoefficient c1Pibb_cf(pw_c1_cf, P_cf_bb_i);
+   ScalarMatrixProductCoefficient negc1Pibb_cf(-1.0, c1Pibb_cf);
+   ScalarMatrixProductCoefficient c2Pibb_cf(pw_c2_cf, P_cf_bb_i);
+
+   real_t scale = (debug) ? 0.0 : 1.0;
+
+   ConstantCoefficient eps0omeg2(eps0 * omega * omega * scale);
+
 
    if (eld)
    {
-      // - i ω²( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F)
-      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(negeps0omeg2)), 1, 0);
-      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(negeps0omeg2)), 2, 0);
-      // (b ⊗ b ∇Jₕ⁽¹⁾ : ∇G)
-      a->AddDomainIntegrator(new VectorDiffusionIntegrator(bb_cf),nullptr,1,1);
+      //  i ω² ϵ₀ ( (Jₕ⁽¹⁾ + Jₕ⁽²⁾), F)
+      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(eps0omeg2)), 1, 0);
+      a->AddDomainIntegrator(nullptr, new TransposeIntegrator(new VectorFEMassIntegrator(eps0omeg2)), 2, 0);
+      //  ( (b⋅∇)Jₕ⁽¹⁾, (b⋅∇) G)
+      a->AddDomainIntegrator(new DirectionalDiffusionIntegrator(b_cf), nullptr, 1, 1);
       // c₁ (Jₕ⁽¹⁾, G)
-      a->AddDomainIntegrator(new VectorMassIntegrator(c1_cf), nullptr, 1, 1);
+      a->AddDomainIntegrator(new VectorMassIntegrator(pw_c1_cf), nullptr, 1, 1);
       // - c₁ (P(r) (b ⊗ b) E, G)
-      a->AddDomainIntegrator(new VectorFEMassIntegrator(negc1Prbb_cf), nullptr, 0, 1);
-      //  (b ⊗ b ∇Jₕ⁽²⁾ : ∇H)
-      a->AddDomainIntegrator(new VectorDiffusionIntegrator(bb_cf), nullptr, 2, 2);
+      a->AddDomainIntegrator(new VectorFEMassIntegrator(negc1Prbb_cf), new VectorFEMassIntegrator(negc1Pibb_cf), 0, 1);
+      //   ( (b⋅∇)Jₕ⁽²⁾, (b⋅∇) H)
+      a->AddDomainIntegrator(new DirectionalDiffusionIntegrator(b_cf), nullptr, 2, 2);
       // c₂ (Jₕ⁽²⁾, H)
-      a->AddDomainIntegrator(new VectorMassIntegrator(c2_cf), nullptr, 2, 2);
+      a->AddDomainIntegrator(new VectorMassIntegrator(pw_c2_cf), nullptr, 2, 2);
       // c₂ (P(r) (b ⊗ b) E, H)
-      a->AddDomainIntegrator(new VectorFEMassIntegrator(c2Prbb_cf), nullptr, 0, 2);
+      a->AddDomainIntegrator(new VectorFEMassIntegrator(c2Prbb_cf), new VectorFEMassIntegrator(c2Pibb_cf), 0, 2);
    }
 
    socketstream E_out_r;
@@ -477,3 +547,5 @@ int main(int argc, char *argv[])
    return 0;
 
 }
+
+

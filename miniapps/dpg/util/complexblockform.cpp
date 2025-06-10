@@ -284,13 +284,27 @@ void ComplexBlockForm::Assemble(int skip_zeros)
             // real integrators
             for (int k = 0; k < integs_r(i,j)->Size(); k++)
             {
-               (*integs_r(i,j))[k]->AssembleElementMatrix2(fe_i,fe_j,*eltrans,Ae_r);
+               if (i == j)
+               {
+                  (*integs_r(i,j))[k]->AssembleElementMatrix(fe_i,*eltrans,Ae_r);
+               }
+               else
+               {
+                  (*integs_r(i,j))[k]->AssembleElementMatrix2(fe_i,fe_j,*eltrans,Ae_r);
+               }
                A_r.AddSubMatrix(offs[j], offs[i], Ae_r);
             }
             // imag integrators
             for (int k = 0; k < integs_i(i,j)->Size(); k++)
             {
-               (*integs_i(i,j))[k]->AssembleElementMatrix2(fe_i, fe_j, *eltrans, Ae_i);
+               if (i == j)
+               {
+                  (*integs_i(i,j))[k]->AssembleElementMatrix(fe_i,*eltrans,Ae_i);
+               }
+               else
+               {
+                  (*integs_i(i,j))[k]->AssembleElementMatrix2(fe_i, fe_j, *eltrans, Ae_i);
+               }
                A_i.AddSubMatrix(offs[j], offs[i], Ae_i);
             }
          }
