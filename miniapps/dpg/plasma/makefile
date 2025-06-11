@@ -54,10 +54,13 @@ LH_FEM_OBJ = $(LH_FEM_SRC:.cpp=.o)
 LH_ELD_FEM_SRC = lh-eld-fem.cpp $(DPG_COMPLEX_PAR_SRC)
 LH_ELD_FEM_OBJ = $(LH_ELD_FEM_SRC:.cpp=.o)
 
+LH_ELD_DPG_SRC = lh-eld-dpg.cpp $(DPG_COMPLEX_PAR_SRC)
+LH_ELD_DPG_OBJ = $(LH_ELD_DPG_SRC:.cpp=.o)
+
 SEQ_MINIAPPS = 
 PAR_MINIAPPS = pmaxwell-tokamak pmaxwell-fem-tokamak \
  pmaxwell-primal-tokamak pmaxwell-uw-tokamak  \
- pmaxwell-uw-lh pmaxwell-fem-lh pmaxwell-primal-lh lh-fem lh-eld-fem
+ pmaxwell-uw-lh pmaxwell-fem-lh pmaxwell-primal-lh lh-fem lh-eld-fem lh-eld-dpg
 
 ifeq ($(MFEM_USE_MPI),NO)
    MINIAPPS = $(SEQ_MINIAPPS)
@@ -112,6 +115,9 @@ lh-fem: $(LH_FEM_OBJ)
 
 lh-eld-fem: $(LH_ELD_FEM_OBJ)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $(LH_ELD_FEM_OBJ) $(COMMON_LIB) $(MFEM_LIBS)
+
+lh-eld-dpg: $(LH_ELD_DPG_OBJ)
+	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $(LH_ELD_DPG_OBJ) $(COMMON_LIB) $(MFEM_LIBS)
 
 # Rule for building lib-common
 lib-common:
