@@ -223,7 +223,6 @@ void ComputeB(const Vector &x, Vector &b)
    if (dim == 3) { b(2) = 0.0; }
 }
 
-
 void DirectionalDiffusionIntegrator::AssembleElementMatrix(
    const FiniteElement &el,
    ElementTransformation &Trans,
@@ -247,9 +246,9 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix(
    DenseMatrix dshape(dof, dim);
    Vector vec(dim);
 
-   for (int i = 0; i < ir->GetNPoints(); i++)
+   for (int k = 0; k < ir->GetNPoints(); k++)
    {
-      const IntegrationPoint &ip = ir->IntPoint(i);
+      const IntegrationPoint &ip = ir->IntPoint(k);
       Trans.SetIntPoint(&ip);
       double w = ip.weight * Trans.Weight();
       VQ->Eval(vec, Trans, ip);
@@ -269,7 +268,7 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix(
       {
          for (int comp_j = 0; comp_j < vdim; comp_j++)
          {
-            if (comp_i == comp_j) 
+            if (comp_i == comp_j)
             {
                for (int j = 0; j < dof; j++)
                {
@@ -277,8 +276,8 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix(
                   {
                      int jj = j + comp_i * dof;
                      int ii = i + comp_j * dof;
-                     elmat(jj, ii) += w * vq_grad_phi(j) 
-                                        * vq_grad_phi(i);
+                     elmat(jj, ii) += w * vq_grad_phi(j)
+                                      * vq_grad_phi(i);
                   }
                }
             }
@@ -311,9 +310,9 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix2(
    DenseMatrix trial_dshape(trial_dof, dim);
    DenseMatrix test_dshape(test_dof, dim);
 
-   for (int i = 0; i < ir->GetNPoints(); i++)
+   for (int k = 0; k < ir->GetNPoints(); k++)
    {
-      const IntegrationPoint &ip = ir->IntPoint(i);
+      const IntegrationPoint &ip = ir->IntPoint(k);
       Trans.SetIntPoint(&ip);
       double w = ip.weight * Trans.Weight();
       VQ->Eval(vec, Trans, ip);
@@ -330,7 +329,7 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix2(
          }
       }
 
-      Vector vq_grad_phi_test(trial_dof); vq_grad_phi_test = 0.0;
+      Vector vq_grad_phi_test(test_dof); vq_grad_phi_test = 0.0;
       for (int j = 0; j < test_dof; j++)
       {
          for (int d = 0; d < dim; d++)
@@ -352,13 +351,11 @@ void DirectionalDiffusionIntegrator::AssembleElementMatrix2(
                      int jj = j + test_comp * test_dof;
                      int ii = i + trial_comp * trial_dof;
                      elmat(jj, ii) += w * vq_grad_phi_test(j)
-                                        * vq_grad_phi_trial(i);
+                                      * vq_grad_phi_trial(i);
                   }
                }
             }
          }
       }
-
-
    }
 }

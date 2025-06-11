@@ -80,11 +80,11 @@ void VisualizeMatrixArrayCoefficient(MatrixArrayCoefficient &mc, ParMesh *pmesh,
 
 void ComputeB(const Vector &x, Vector &b);
 
-// Integrator for (vq·∇) u · (vq·∇) v where u,v ∈ (H¹(Ω))ᵈ    
+// Integrator for (vq·∇) u · (vq·∇) v where u,v ∈ (H¹(Ω))ᵈ
 class DirectionalDiffusionIntegrator : public BilinearFormIntegrator
 {
 private:
-   VectorCoefficient *VQ; 
+   VectorCoefficient *VQ;
 
 public:
    DirectionalDiffusionIntegrator(VectorCoefficient &q) : VQ(&q) { }
