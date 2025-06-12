@@ -49,16 +49,16 @@
 //                                                                  Ê = E₀, on ∂Ω
 //                                                            Ĵ₁ = Ĵ₂ = 0,  on ∂Ω
 // ----------------------------------------------------------------------------------------------------------------
-// |   |      E       |     H    |        J₁        |        J₂        |   Ê   |   Ĥ    |   Ĵ₁   |   Ĵ₂   |  RHS  |
+// |   |      E       |     H    |   Ê   |   Ĥ    |        J₁        |        J₂        |   Ĵ₁   |   Ĵ₂   |  RHS  |
 // ----------------------------------------------------------------------------------------------------------------
-// |δE |  (E,∇ × δE)  |iωμ₀(H,δE)|                  |                  | <Ê,δE>|        |        |        |   0   |  
-// |   |              |          |                  |                  |       |        |        |        |       |  
-// |δH | -iωϵ₀ϵ(E,δH) | (H,∇×δH) |   -ωϵ₀ (J₁,δH)   |  -ωϵ₀ (J₂,δH)    |       |<Ĥ,δH×n>|        |        |   0   |  
-// |   |              |          |                  |                  |       |        |        |        |       |  
-// |δJ₁|-c₁(P(r)E,δJ₁)|          |((b⋅∇)J₁,(b⋅∇)δJ₁)|                  |       |        |<Ĵ₁,δJ₁>|        |   0   |  
-// |   |              |          |     + c₁ (J₁,δJ₁)|                  |       |        |        |        |       |    
-// |δJ₂| c₂(P(r)E,δJ₂)|          |                  |((b⋅∇)J₂,(b⋅∇)δJ₂)|       |        |        |<Ĵ₂,δJ₂>|   0   |  
-// |   |              |          |                  |     + c₂ (J₂,δJ₂)|       |        |        |        |       |    
+// |δE |  (E,∇ × δE)  |iωμ₀(H,δE)| <Ê,δE>|        |                  |                  |        |        |   0   |  
+// |   |              |          |       |        |                  |                  |        |        |       |  
+// |δH | -iωϵ₀ϵ(E,δH) | (H,∇×δH) |       |<Ĥ,δH×n>|   -ωϵ₀ (J₁,δH)   |  -ωϵ₀ (J₂,δH)    |        |        |   0   |  
+// |   |              |          |       |        |                  |                  |        |        |       |  
+// |δJ₁|-c₁(P(r)E,δJ₁)|          |       |        |((b⋅∇)J₁,(b⋅∇)δJ₁)|                  |<Ĵ₁,δJ₁>|        |   0   |  
+// |   |              |          |       |        |     + c₁ (J₁,δJ₁)|                  |        |        |       |    
+// |δJ₂| c₂(P(r)E,δJ₂)|          |       |        |                  |((b⋅∇)J₂,(b⋅∇)δJ₂)|        |<Ĵ₂,δJ₂>|   0   |  
+// |   |              |          |       |        |                  |     + c₂ (J₂,δJ₂)|        |        |       |    
 // where (δE,δH,δJ₁,δJ₂) ∈  H¹(Ω) × H(curl,Ω) × (H¹(Ω))² × (H¹(Ω))² 
 
 
@@ -129,16 +129,21 @@ int main(int argc, char *argv[])
    int par_ref_levels = 0;
    int ser_ref_levels = 0;
 
-   real_t rnum=1.5e9;
-   real_t mu = 1.257e-6;
-   real_t eps0 = 8.8541878128e-12;
+   // real_t rnum=1.5e9;
+   // real_t mu = 1.257e-6;
+   // real_t eps0 = 8.8541878128e-12;
+
+   real_t rnum=1.5;
+   real_t mu = 1.257;
+   real_t eps0 = 8.8541878128;
+
    bool eld = false; // enable/disable electron Landau damping 
 
    bool static_cond = false;
    bool visualization = false;
    bool paraview = false;
    bool debug = false;
-
+   bool mumps_solver = false;
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
@@ -158,6 +163,9 @@ int main(int argc, char *argv[])
    args.AddOption(&eld, "-eld", "--eld", "-no-eld",
                   "--no-eld",
                   "Enable or disable electron Landau damping.");
+   args.AddOption(&mumps_solver, "-mumps", "--mumps", "-no-mumps",
+                  "--no-mumps",
+                  "Enable or disable MUMPS solver.");
    args.AddOption(&paraview, "-paraview", "--paraview", "-no-paraview",
                   "--no-paraview",
                   "Enable or disable ParaView visualization.");
@@ -209,7 +217,6 @@ int main(int argc, char *argv[])
    Mesh mesh(mesh_file, 1, 1);
    int dim = mesh.Dimension();
    MFEM_VERIFY(dim == 2, "Dimension != 2 is not supported in this example");
-   int dimc = 1;
 
    for (int i = 0; i < ser_ref_levels; i++)
    {
@@ -232,7 +239,8 @@ int main(int argc, char *argv[])
    // -ω μ₀  
    ConstantCoefficient negomegamu_cf(-omega*mu);
    // -ωϵ₀
-   ConstantCoefficient negomegeps0_cf(-omega*eps0);
+   real_t scale = (debug) ? 0.0 : 1.0;
+   ConstantCoefficient negomegeps0_cf(-omega*eps0 * scale);
    // μ₀² ω²
    ConstantCoefficient mu2omeg2_cf((mu*mu*omega*omega));
 
@@ -283,12 +291,6 @@ int main(int argc, char *argv[])
    PWMatrixCoefficient eps_cf_r(dim, attr, coefs_r);
    PWMatrixCoefficient eps_cf_i(dim, attr, coefs_i);
 
-   real_t scale = (debug) ? 0.0 : 1.0;
-   ConstantCoefficient eps0omeg2(eps0 * omega * omega * scale);
-   ConstantCoefficient negeps0omeg2(-eps0 * omega * omega);
-
-   ScalarMatrixProductCoefficient m_cf_r(negeps0omeg2, eps_cf_r);
-   ScalarMatrixProductCoefficient m_cf_i(negeps0omeg2, eps_cf_i);
 
    ConstantCoefficient eps0omeg(omega * eps0);
    ConstantCoefficient negeps0omeg(-omega * eps0);
@@ -357,25 +359,28 @@ int main(int argc, char *argv[])
 
    // Vector L2 space for E
    trial_fecols.Append(new L2_FECollection(order-1, dim));
-   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols[0], dim));
+   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last(), dim));
    // Scalar L2 space for H
    trial_fecols.Append(new L2_FECollection(order-1, dim));
-   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols[1]));
+   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last()));
+
+   // Trial trace space for Ê 
+   trial_fecols.Append(new RT_Trace_FECollection(order-1, dim));
+   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last()));
+
+   // Trial trace space for Ĥ 
+   trial_fecols.Append(new H1_Trace_FECollection(order, dim));
+   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last()));
+
 
    // Vector H1 space for Js
    for (int i = 0; i < ndiffusionequations; i++)
    {
       trial_fecols.Append(new H1_FECollection(order, dim));
-      pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols[i+1], dim));
+      pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last(), dim));
    }
 
-   // Trial trace spaces
-   trial_fecols.Append(new RT_Trace_FECollection(order-1, dim));
-   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last()));
-
-   trial_fecols.Append(new H1_Trace_FECollection(order, dim));
-   pfes.Append(new ParFiniteElementSpace(&pmesh, trial_fecols.Last()));
-
+   // Vector Trace spaces for Js   
    for (int i = 0; i < ndiffusionequations; i++)
    {
       trial_fecols.Append(new RT_Trace_FECollection(order-1,dim));
@@ -397,10 +402,10 @@ int main(int argc, char *argv[])
       cout << "Total number of true dofs: " << tdofs.Sum() << endl;
    }
 
-
-
+   // test spaces for E and H
    test_fecols.Append(new H1_FECollection(test_order, dim));
    test_fecols.Append(new ND_FECollection(test_order, dim));
+   // Test spaces δJs 
    for (int i = 0; i < ndiffusionequations; i++)
    {
       test_fecols.Append(new H1_FECollection(test_order, dim));
@@ -411,8 +416,6 @@ int main(int argc, char *argv[])
    {
       a->SetTestFECollVdim(i+2,dim);
    }
-   a->StoreMatrices();
-
 
    // (E,∇ × δE)
    a->AddTrialIntegrator(new TransposeIntegrator(new MixedCurlIntegrator(one_cf)),
@@ -423,48 +426,42 @@ int main(int argc, char *argv[])
       new TransposeIntegrator(new VectorFEMassIntegrator(eps0omeg_eps_i)), 
       new TransposeIntegrator(new VectorFEMassIntegrator(negeps0omeg_eps_r)),
                               0,1);
-
    // iωμ₀(H,δE) 
    a->AddTrialIntegrator(nullptr,new MixedScalarMassIntegrator(omegamu_cf),1, 0);
-
    // (H,∇ × δH)                         
    a->AddTrialIntegrator(
       new TransposeIntegrator(new MixedCurlIntegrator(one_cf)), nullptr,1, 1);
 
+   // Trace integrators               
+   //  <Ê,δE>
+   a->AddTrialIntegrator(new TraceIntegrator,nullptr, 2, 0);
+   // <Ĥ,δH × n>
+   a->AddTrialIntegrator(new TangentTraceIntegrator,nullptr, 3, 1);
    if (eld)
    {
       for (int i = 0; i < ndiffusionequations; i++)
       {
-         // ±cᵢ(P(r) (b ⊗ b) E, G)
+         // ±cᵢ(P(r) (b ⊗ b) E, δJᵢ)
          a->AddTrialIntegrator(new VectorMassIntegrator(*signedcPrbb_cf[i]),
                                new VectorMassIntegrator(*signedcPibb_cf[i]),
                                0, i+2);
          // -ωϵ₀ (Jᵢ ,δH)
          a->AddTrialIntegrator(
             new TransposeIntegrator(new VectorFEMassIntegrator(negomegeps0_cf)),
-                           nullptr,i+2, 1);
+                           nullptr,i+4, 1);
          // ((b⋅∇)Jᵢ, (b⋅∇) δJᵢ)
          a->AddTrialIntegrator(new DirectionalDiffusionIntegrator(b_cf), nullptr,
-                               i+2, i+2);
+                               i+4, i+2);
          // cᵢ(Jᵢ, δJᵢ)
          a->AddTrialIntegrator(new VectorMassIntegrator(*pw_c_coeffs[i]), nullptr,
-                               i+2, i+2);
+                               i+4, i+2);
+
+         // <Ĵ,δJ>
+         a->AddTrialIntegrator(new VectorTraceIntegrator,nullptr,
+                               i + ndiffusionequations + 4, i+2);                      
       }
    }      
-   // Trace integrators               
-   int skip = ndiffusionequations + 2;
-   //  <Ê,δE>
-   a->AddTrialIntegrator(new TraceIntegrator,nullptr, skip, 0);
 
-   // <Ĥ,δH × n>
-   a->AddTrialIntegrator(new TangentTraceIntegrator,nullptr, skip + 1, 1);
-
-   // <Ĵ,δJ>
-   for (int i = 0; i < ndiffusionequations; i++)
-   {
-      a->AddTrialIntegrator(new VectorTraceIntegrator,nullptr,
-                            skip + 2 + i, i+2);
-   }
 
    // test integrators
    // (∇δE,∇δE)
@@ -504,12 +501,10 @@ int main(int argc, char *argv[])
                            i+2,i+2);
       // (b⋅∇δJ, b⋅∇δJ)
       // a->AddTestIntegrator(new DirectionalDiffusionIntegrator(b_cf),nullptr,
-      //                      i+2,i+2);                     
+                           // i+2,i+2);                     
       // (δJ,δJ)
       a->AddTestIntegrator(new VectorMassIntegrator(one_cf),nullptr, 
                            i+2,i+2);
-
-
    }
 
    if (static_cond) { a->EnableStaticCondensation(); }
@@ -557,7 +552,7 @@ int main(int argc, char *argv[])
 
    ParaViewDataCollection * paraview_dc = nullptr;
 
-   std::string output_dir = "ParaView/UWDPG/" + GetTimestamp();
+   std::string output_dir = "ParaView/UW/" + GetTimestamp();
 
    if (paraview)
    {
@@ -566,7 +561,8 @@ int main(int argc, char *argv[])
       std::string filename = GetFilename(mesh_file);
       paraview_file_name << filename
                          << "_par_ref_" << par_ref_levels
-                         << "_order_" << order;
+                         << "_order_" << order
+                         << "_eld_" << eld;
       paraview_dc = new ParaViewDataCollection(paraview_file_name.str(), &pmesh);
       paraview_dc->SetPrefixPath(output_dir);
       paraview_dc->SetLevelsOfDetail(order);
@@ -582,10 +578,10 @@ int main(int argc, char *argv[])
       paraview_dc->RegisterField("H_i",pgf_i[1]);      
       if (eld)
       {
-         paraview_dc->RegisterField("Jh_1_r",pgf_r[2]);
-         paraview_dc->RegisterField("Jh_1_i",pgf_i[2]);
-         paraview_dc->RegisterField("Jh_2_r",pgf_r[3]);
-         paraview_dc->RegisterField("Jh_2_i",pgf_i[3]);
+         paraview_dc->RegisterField("Jh_1_r",pgf_r[4]);
+         paraview_dc->RegisterField("Jh_1_i",pgf_i[4]);
+         paraview_dc->RegisterField("Jh_2_r",pgf_r[5]);
+         paraview_dc->RegisterField("Jh_2_i",pgf_i[5]);
       }
    }
 
@@ -606,20 +602,18 @@ int main(int argc, char *argv[])
       negone_r_bdr.SetSize(pmesh.bdr_attributes.Max());
       negone_i_bdr.SetSize(pmesh.bdr_attributes.Max());
       ess_bdr = 1;
-      pfes[skip]->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
-      mfem::out << "skip = " << skip << endl;
-      mfem::out << "tdofsets[skip] = " << toffsets[skip] << endl;
-      for (int j = 0; j < ess_tdof_listJ.Size(); j++)
+      pfes[2]->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+      for (int j = 0; j < ess_tdof_list.Size(); j++)
       {
-         ess_tdof_list[j] += toffsets[skip];
+         ess_tdof_list[j] += toffsets[2];
       }
       for (int i = 0; i<ndiffusionequations;i++)
       {
          ess_tdof_listJ.SetSize(0);
-         pfes[i+2]->GetEssentialTrueDofs(ess_bdr, ess_tdof_listJ);
+         pfes[i+4]->GetEssentialTrueDofs(ess_bdr, ess_tdof_listJ);
          for (int j = 0; j < ess_tdof_listJ.Size(); j++)
          {
-            ess_tdof_listJ[j] += toffsets[i+2];
+            ess_tdof_listJ[j] += toffsets[i+4];
          }
          ess_tdof_list.Append(ess_tdof_listJ);
       }
@@ -644,21 +638,15 @@ int main(int argc, char *argv[])
    VectorConstantCoefficient rot_one_x_cf(rot_one_x);
    VectorConstantCoefficient rot_negone_x_cf(rot_negone_x);
 
-   pgf_r[skip]->ProjectBdrCoefficientNormal(rot_one_x_cf, one_r_bdr);
-   pgf_r[skip]->ProjectBdrCoefficientNormal(rot_negone_x_cf, negone_r_bdr);
-   pgf_i[skip]->ProjectBdrCoefficientNormal(rot_one_x_cf, one_i_bdr);
-   pgf_i[skip]->ProjectBdrCoefficientNormal(rot_negone_x_cf, negone_i_bdr);
+   pgf_r[2]->ProjectBdrCoefficientNormal(rot_one_x_cf, one_r_bdr);
+   pgf_r[2]->ProjectBdrCoefficientNormal(rot_negone_x_cf, negone_r_bdr);
+   pgf_i[2]->ProjectBdrCoefficientNormal(rot_one_x_cf, one_i_bdr);
+   pgf_i[2]->ProjectBdrCoefficientNormal(rot_negone_x_cf, negone_i_bdr);
 
    OperatorPtr Ah;
    Vector X,B;
-   mfem::out << "norm x = " << x.Norml2() << endl;
-   cin.get();
    a->FormLinearSystem(ess_tdof_list,x,Ah, X,B);
-   ess_tdof_list.Print();
-   cin.get();
    
-   mfem::out << "norm B = " << B.Norml2() << endl;
-   cin.get();
    ComplexOperator * Ahc = Ah.As<ComplexOperator>();
 
    BlockOperator * BlockA_r = dynamic_cast<BlockOperator *>(&Ahc->real());
@@ -676,6 +664,26 @@ int main(int argc, char *argv[])
          A_i_matrices(i,j) = dynamic_cast<HypreParMatrix*>(&BlockA_i->GetBlock(i,j));
       }
    }
+
+   // for (int i = 0; i < nblocks; i++)
+   // {
+   //    for (int j = 0; j < nblocks; j++)
+   //    {
+   //       mfem::out << "Block A_r(" << i << "," << j << ") has "
+   //            << A_r_matrices(i,j)->Height() << " rows and "
+   //            << A_r_matrices(i,j)->Width() << " columns." << endl;
+   //       std::ostringstream fname_r, fname_i;
+   //       fname_r << "Ar_" << i << "_" << j << "_eld_" << eld << ".dat";
+   //       fname_i << "Ai_" << i << "_" << j << "_eld_" << eld << ".dat";   
+   //       std::ofstream mat_namer(fname_r.str());
+   //       std::ofstream mat_namei(fname_i.str());   
+   //       A_r_matrices(i,j)->PrintMatlab(mat_namer,0,0);
+   //       A_i_matrices(i,j)->PrintMatlab(mat_namei,0,0);
+   //       cin.get();
+   //    }
+   // }
+
+
    HypreParMatrix * Ahr = HypreParMatrixFromBlocks(A_r_matrices);
    HypreParMatrix * Ahi = HypreParMatrixFromBlocks(A_i_matrices);
 
@@ -686,19 +694,112 @@ int main(int argc, char *argv[])
    {
       mfem::out << "Assembly finished successfully." << endl;
    }
+      HypreParMatrix *A = Ahc_hypre->GetSystemMatrix();
 
 #ifdef MFEM_USE_MUMPS
-   HypreParMatrix *A = Ahc_hypre->GetSystemMatrix();
-   auto solver = new MUMPSSolver(MPI_COMM_WORLD);
-   solver->SetMatrixSymType(MUMPSSolver::MatType::UNSYMMETRIC);
-   solver->SetPrintLevel(1);
-   solver->SetOperator(*A);
-   solver->Mult(B,X);
-   delete A;
-   delete solver;
+   if (mumps_solver)
+   {
+      auto solver = new MUMPSSolver(MPI_COMM_WORLD);
+      solver->SetMatrixSymType(MUMPSSolver::MatType::UNSYMMETRIC);
+      solver->SetPrintLevel(1);
+      solver->SetOperator(*A);
+      solver->Mult(B,X);
+      delete A;
+      delete solver;
+   }
 #else
-   MFEM_ABORT("MFEM compiled without mumps");
+   if (mumps_solver)
+   {
+      MFEM_WARNING("MFEM compiled without mumps. Switching to an iterative solver");
+   }
+   mumps_solver = false;
 #endif
+   int num_iter = -1;
+
+   Array<int> tdof_offsets(2*nblocks+1);
+   int skip = (static_cond) ? 0 : 2;
+   tdof_offsets[0] = 0;
+   int k = (static_cond) ? 2 : 0;
+   for (int i=0; i<nblocks; i++)
+   {
+      tdof_offsets[i+1] = pfes[i+k]->GetTrueVSize();
+      tdof_offsets[nblocks+i+1] = pfes[i+k]->GetTrueVSize();
+   }
+   tdof_offsets.PartialSum();
+
+   if (!mumps_solver)
+   {
+
+      BlockDiagonalPreconditioner M(tdof_offsets);
+
+      if (!static_cond)
+      {
+         HypreBoomerAMG * solver_E = new HypreBoomerAMG((HypreParMatrix &)
+                                                   BlockA_r->GetBlock(0,0));
+         solver_E->SetPrintLevel(0);
+         solver_E->SetSystemsOptions(dim);
+         HypreBoomerAMG * solver_H = new HypreBoomerAMG((HypreParMatrix &)
+                                                   BlockA_r->GetBlock(1,1));
+         solver_H->SetPrintLevel(0);
+         // solver_H->SetSystemsOptions(dim);
+         M.SetDiagonalBlock(0,solver_E);
+         M.SetDiagonalBlock(1,solver_H);
+         M.SetDiagonalBlock(nblocks,solver_E);
+         M.SetDiagonalBlock(nblocks+1,solver_H);
+      }
+      HypreAMS * solver_hatE = 
+      new HypreAMS((HypreParMatrix &)BlockA_r->GetBlock(skip,
+                                    skip), pfes[skip]);
+      HypreBoomerAMG * solver_hatH = 
+      new HypreBoomerAMG((HypreParMatrix &)
+                                                        BlockA_r->GetBlock(
+                                                        skip+1,skip+1));
+      solver_hatE->SetPrintLevel(0);
+      solver_hatH->SetPrintLevel(0);
+      solver_hatH->SetRelaxType(88);
+
+      M.SetDiagonalBlock(skip,solver_hatE);
+      M.SetDiagonalBlock(skip+1,solver_hatH);
+      M.SetDiagonalBlock(skip+nblocks,solver_hatE);
+      M.SetDiagonalBlock(skip+nblocks+1,solver_hatH);
+
+      if (eld)
+      {
+         HypreBoomerAMG * solver_J1 = new HypreBoomerAMG((HypreParMatrix &)
+                               BlockA_r->GetBlock(skip+2,skip+2));
+         solver_J1->SetPrintLevel(0);
+         solver_J1->SetSystemsOptions(dim);
+         M.SetDiagonalBlock(skip+2,solver_J1);
+         M.SetDiagonalBlock(skip+nblocks+2,solver_J1);
+         HypreBoomerAMG * solver_J2 = new HypreBoomerAMG((HypreParMatrix &)
+                               BlockA_r->GetBlock(skip+3,skip+3));
+         solver_J2->SetPrintLevel(0);
+         solver_J2->SetSystemsOptions(dim);
+         M.SetDiagonalBlock(skip+3,solver_J2);
+         M.SetDiagonalBlock(skip+nblocks+3,solver_J2);
+         HypreBoomerAMG * solver_hatJ1 = new HypreBoomerAMG((HypreParMatrix &)
+                                            BlockA_r->GetBlock(skip+4,skip+4));
+         solver_hatJ1->SetPrintLevel(0);
+         solver_hatJ1->SetSystemsOptions(dim);
+         solver_hatJ1->SetRelaxType(88);
+         M.SetDiagonalBlock(skip+4,solver_hatJ1);
+         M.SetDiagonalBlock(skip+nblocks+4,solver_hatJ1);
+         HypreBoomerAMG * solver_hatJ2 = new HypreBoomerAMG((HypreParMatrix &)
+                                            BlockA_r->GetBlock(skip+5,skip+5));
+         solver_hatJ2->SetPrintLevel(0);
+         solver_hatJ2->SetSystemsOptions(dim);
+         solver_hatJ2->SetRelaxType(88);
+         M.SetDiagonalBlock(skip+5,solver_hatJ2);
+         M.SetDiagonalBlock(skip+nblocks+5,solver_hatJ2);
+      }
+      CGSolver cg(MPI_COMM_WORLD);
+      cg.SetRelTol(1e-10);
+      cg.SetMaxIter(1000);
+      cg.SetPrintLevel(1);
+      cg.SetPreconditioner(M);
+      cg.SetOperator(*A);
+      cg.Mult(B, X);
+   }
 
    a->RecoverFEMSolution(X, x);
 
@@ -730,26 +831,26 @@ int main(int argc, char *argv[])
       delete paraview_dc;
    }
 
-   //    Array<int> tdof_offsets(2*num_blocks+1);
+   //    Array<int> tdof_offsets(2*nblocks+1);
 
    //    tdof_offsets[0] = 0;
    //    int skip = (static_cond) ? 0 : 2;
-   //    for (int i=0; i<num_blocks; i++)
+   //    for (int i=0; i<nblocks; i++)
    //    {
    //       tdof_offsets[i+1] = BlockA_r->GetBlock(i,i).Height();
-   //       tdof_offsets[num_blocks+i+1] = BlockA_r->GetBlock(i,i).Height();
+   //       tdof_offsets[nblocks+i+1] = BlockA_r->GetBlock(i,i).Height();
    //    }
    //    tdof_offsets.PartialSum();
    //    BlockOperator blockA(tdof_offsets);
 
-   //    for (int i = 0; i<num_blocks; i++)
+   //    for (int i = 0; i<nblocks; i++)
    //    {
-   //       for (int j = 0; j<num_blocks; j++)
+   //       for (int j = 0; j<nblocks; j++)
    //       {
    //          blockA.SetBlock(i,j,&BlockA_r->GetBlock(i,j));
-   //          blockA.SetBlock(i,j+num_blocks,&BlockA_i->GetBlock(i,j), -1.0);
-   //          blockA.SetBlock(i+num_blocks,j+num_blocks,&BlockA_r->GetBlock(i,j));
-   //          blockA.SetBlock(i+num_blocks,j,&BlockA_i->GetBlock(i,j));
+   //          blockA.SetBlock(i,j+nblocks,&BlockA_i->GetBlock(i,j), -1.0);
+   //          blockA.SetBlock(i+nblocks,j+nblocks,&BlockA_r->GetBlock(i,j));
+   //          blockA.SetBlock(i+nblocks,j,&BlockA_i->GetBlock(i,j));
    //       }
    //    }
 
@@ -767,8 +868,8 @@ int main(int argc, char *argv[])
    //       solver_H->SetSystemsOptions(dim);
    //       M.SetDiagonalBlock(0,solver_E);
    //       M.SetDiagonalBlock(1,solver_H);
-   //       M.SetDiagonalBlock(num_blocks,solver_E);
-   //       M.SetDiagonalBlock(num_blocks+1,solver_H);
+   //       M.SetDiagonalBlock(nblocks,solver_E);
+   //       M.SetDiagonalBlock(nblocks+1,solver_H);
    //    }
 
    //    HypreBoomerAMG * solver_J = new HypreBoomerAMG((HypreParMatrix &)
@@ -776,7 +877,7 @@ int main(int argc, char *argv[])
    //    solver_J->SetPrintLevel(0);
    //    solver_J->SetSystemsOptions(dim);
    //    M.SetDiagonalBlock(skip,solver_J);
-   //    M.SetDiagonalBlock(skip+num_blocks,solver_J);
+   //    M.SetDiagonalBlock(skip+nblocks,solver_J);
 
    //    HypreAMS * solver_hatE = new HypreAMS((HypreParMatrix &)BlockA_r->GetBlock(
    //                                             skip+1,skip+1),
@@ -803,9 +904,9 @@ int main(int argc, char *argv[])
    //    M.SetDiagonalBlock(skip+1,solver_hatE);
    //    M.SetDiagonalBlock(skip+2,solver_hatH);
    //    M.SetDiagonalBlock(skip+3,solver_hatJ);
-   //    M.SetDiagonalBlock(num_blocks+skip+1,solver_hatE);
-   //    M.SetDiagonalBlock(num_blocks+skip+2,solver_hatH);
-   //    M.SetDiagonalBlock(num_blocks+skip+3,solver_hatJ);
+   //    M.SetDiagonalBlock(nblocks+skip+1,solver_hatE);
+   //    M.SetDiagonalBlock(nblocks+skip+2,solver_hatH);
+   //    M.SetDiagonalBlock(nblocks+skip+3,solver_hatJ);
 
    //    CGSolver cg(MPI_COMM_WORLD);
    //    cg.SetRelTol(1e-10);
@@ -816,7 +917,7 @@ int main(int argc, char *argv[])
    //    cg.Mult(B, X);
    //    int num_iter = cg.GetNumIterations();
 
-   //    for (int i = 0; i<num_blocks; i++)
+   //    for (int i = 0; i<nblocks; i++)
    //    {
    //       delete &M.GetDiagonalBlock(i);
    //    }

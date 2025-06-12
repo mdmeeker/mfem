@@ -84,20 +84,11 @@ int main(int argc, char *argv[])
    Mesh mesh(mesh_file, 1, 1);
    int dim = mesh.Dimension();
 
-   // Array<int> int_bdr_attr;
-   // for (int i = 0; i < mesh.GetNBE(); i++)
-   // {
-   //    if (mesh.FaceIsInterior(mesh.GetBdrElementFaceIndex(i)))
-   //    {
-   //       int_bdr_attr.Append(mesh.GetBdrAttribute(i));
-   //    }
-   // }
-   // int_bdr_attr.Sort();
-   // int_bdr_attr.Unique();
 
-   // mesh.RemoveInternalBoundaries();
+   mesh.RemoveInternalBoundaries();
    ParMesh pmesh(MPI_COMM_WORLD, mesh);
-
+   mesh.Clear();
+   
    int nattr = pmesh.attributes.Max();
    Array<int> attr(nattr);
    for (int i = 0; i<nattr; i++) { attr[i] = i+1; }
