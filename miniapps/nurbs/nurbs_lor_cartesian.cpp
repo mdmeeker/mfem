@@ -29,6 +29,7 @@ int main(int argc, char *argv[])
 {
    // 1. Parse command-line options.
    int dim = 2;
+   bool flatdim = false; // flattens other dimensions
    int np = 1;
    int order = 1;
    int mult = 1;
@@ -39,6 +40,8 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-d", "--dim",
                   "Dimension of the mesh (1, 2, or 3).");
+   args.AddOption(&flatdim, "-fdim", "--flat-dim", "-no-fdim",
+                  "--no-flat-dim", "Flatten dimensions except the first (n=1).");
    args.AddOption(&np, "-n", "--num-patches",
                   "Number of patches in the mesh per dimension.");
    args.AddOption(&order, "-o", "--order",
@@ -68,8 +71,8 @@ int main(int argc, char *argv[])
 
    // 1. Parameters
    const int nx = (dim >= 1) ? np : 1; // Number of patches in each dimension
-   const int ny = (dim >= 2) ? np : 1;
-   const int nz = (dim == 3) ? np : 1;
+   const int ny = (flatdim) ? 1 : ((dim >= 2) ? np : 1);
+   const int nz = (flatdim) ? 1 : ((dim == 3) ? np : 1);
    const int NP = nx*ny*nz;            // Total number of patches in the mesh
    const int pdim = dim + 1;           // Projective/homogeneous dimension
 
