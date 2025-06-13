@@ -15,9 +15,12 @@ int main(int argc, char *argv[])
    const int vdim = 1;
 
    const char *mesh_file = "ho_mesh.mesh";
+   bool printX = false;
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
+   args.AddOption(&printX, "-X", "--printX", "-noX", "--no-printX",
+                  "Print the interpolation matrix.");
    args.Parse();
    // Print & verify options
    args.PrintOptions(cout);
@@ -39,6 +42,13 @@ int main(int argc, char *argv[])
    SparseMatrix* Rinv = new SparseMatrix(Ndof, Ndof);
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, Rinv);
    Rinv->Finalize();
+   if (printX)
+   {
+      ofstream X_ofs("X.txt");
+      cout << "Printing matrix to X.txt" << endl;
+      Rinv->ToDenseMatrix()->PrintMatlab(X_ofs);
+      // Rinv->PrintMatlab(X_ofs);
+   }
    cout << "Finished creating low-order mesh." << endl;
    // I think, this is the most correct interpolation, but it may not be ideal
    // for larger problems. Other options include

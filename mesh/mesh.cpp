@@ -6377,6 +6377,11 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
          int N = ho_patches[p]->GetNCP();
          SparseMatrix smat(N, N);
          ho_patches[p]->GetInterpolationMatrix(*lo_patches[p], smat);
+         // Debugging
+         // smat.Finalize();
+         // mfem::out << "Interpolation matrix for patch " << p << endl;
+         // smat.ToDenseMatrix()->PrintMatlab(mfem::out);
+         // mfem::out << endl;
          Array<int> dofs;
          NURBSext->GetPatchDofs(p, dofs);
 
@@ -6403,7 +6408,15 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
                // vcols.Print(mfem::out, 20);
                int vdrow = fespace.DofToVDof(dofs[r], vd);
                R->SetRow(vdrow, vcols, srow);
-               // mfem::out << "row = " << vdrow << endl << endl;
+               // Debugging
+               mfem::out << "patch = " << p
+                         << ", r = " << r
+                         << ", vd = " << vd
+                         << ", dof = " << dofs[r]
+                         << ", vdrow = " << vdrow
+                         << ", cols = ";
+               vcols.Print(mfem::out, 20);
+               mfem::out << endl;
             }
          }
       }
