@@ -434,6 +434,37 @@ KnotVector *KnotVector::Linearize(NURBSInterpolationRule interp_rule) const
    return newkv;
 }
 
+SparseMatrix KnotVector::GetInterpolationMatrix(const Vector &u) const
+{
+   // Check that the output knots are contained within the knotvector
+   MFEM_VERIFY((u.Min() >= knot[0]) &&
+               (u.Max() <= knot[knot.Size()-1]),
+               "KnotVector::GetInterpolationMatrix : "
+               "Evaluation knots must be contained within the knotvector.");
+
+   // const Vector newknots = GetInterpolationPoints(interp_rule);
+   SparseMatrix X(u.Size(), NumOfControlPoints, Order+1);
+
+   std::vector<KnotVector::ShapeValues> shapes = CalcShapes(u);
+   Array<int> cols(Order+1);
+   for (int i = 0; i < NumOfControlPoints; i++)
+   {
+      for (int j = 0; j < Order+1; j++)
+      {
+         cols[j] = shapes[i].dofidx + j;
+      }
+      X.SetRow(i, cols, shapes[i].shape);
+   }
+
+   return X;
+}
+
+SparseMatrix KnotVector::GetInterpolationMatrix(NURBSInterpolationRule interp_rule) const
+{
+   const Vector newknots = GetInterpolationPoints(interp_rule);
+   return GetInterpolationMatrix(newknots);
+}
+
 real_t KnotVector::GetUniqueKnot(int i) const
 {
    if (uknot.Size() == 0)
@@ -441,6 +472,18 @@ real_t KnotVector::GetUniqueKnot(int i) const
       ComputeUniqueKnots();
    }
    return uknot[i];
+}
+
+void KnotVector::GetUniqueKnots(Vector &uknots) const
+{
+   // Get unique knots
+   const int NUK = GetNUK();
+   mfem::out << "  size of unique knots: " << NUK << endl;
+   uknots.SetSize(NUK);
+   for (int i = 0; i < NUK; i++)
+   {
+      uknots(i) = GetUniqueKnot(i);
+   }
 }
 
 real_t KnotVector::GetKnotMult(int i) const
@@ -2306,7 +2349,7 @@ int NURBSPatch::GetNCP() const
 }
 
 void NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
-                                        SparseMatrix &R) const
+                                        SparseMatrix &X) const
 {
    // Check inputs
    const int dim = kvs.Size();  // Topological dimension
@@ -2346,8 +2389,8 @@ void NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
    const int NNZ = nnzs.Prod();
 
    // Check that the matrix is large enough
-   MFEM_VERIFY(nrows <= R.Height() &&
-               ncols <= R.Width(),
+   MFEM_VERIFY(nrows <= X.Height() &&
+               ncols <= X.Width(),
                "NURBSPatch::GetInterpolationMatrix : "
                "Output matrix is not large enough.");
    // SparseMatrix R(nrows, ncols);//, NNZ);
@@ -2385,22 +2428,20 @@ void NURBSPatch::GetInterpolationMatrix(const Array<Vector*> &kvs,
                   val *= shapes[d][xyz[d]].shape[dijk[d]];
                }
                // Assign
-               R.Set(row, col, val);
+               X.Set(row, col, val);
             }
          }
       }
    }
 
-   // R.Finalize();
-   // return R;
 }
 
 void NURBSPatch::GetInterpolationMatrix(NURBSPatch &patch,
-                                        SparseMatrix &R) const
+                                        SparseMatrix &X) const
 {
    Array<Vector*> kvs;
    patch.GetUniqueKnots(kvs);
-   GetInterpolationMatrix(kvs, R);
+   GetInterpolationMatrix(kvs, X);
 }
 
 NURBSPatch *Interpolate(NURBSPatch &p1, NURBSPatch &p2)

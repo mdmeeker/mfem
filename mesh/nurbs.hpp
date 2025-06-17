@@ -195,7 +195,7 @@ public:
    {
       real_t u;     // knot
       int dofidx;   // index of first non-zero dof
-      Vector shape; // non-zero shape functions
+      Vector shape; // non-zero shape functions (always of size Order+1)
    };
 
    /** @brief Calculate the nonvanishing shape function values in @a shape for
@@ -290,7 +290,15 @@ public:
    KnotVector *Linearize(NURBSInterpolationRule interp_rule =
                             NURBSInterpolationRule::Greville) const;
 
+   // Return the matrix X_ij = phi_j(u_i) that interpolates values
+   // to the locations given by u
+   SparseMatrix GetInterpolationMatrix(const Vector &u) const;
+
+   SparseMatrix GetInterpolationMatrix(NURBSInterpolationRule interp_rule) const;
+
    real_t GetUniqueKnot(int i) const;
+
+   void GetUniqueKnots(Vector &uknots) const;
 
    real_t GetKnotMult(int i) const;
 
@@ -583,12 +591,12 @@ public:
          and cartesian ordering is assumed. @a vdim is the vector dimension
          of the output matrix - values are tiled if vdim > 1. */
    void GetInterpolationMatrix(const Array<Vector*> &kvs,
-                               SparseMatrix &R) const;
+                               SparseMatrix &X) const;
 
    /** @brief Construct the interpolation matrix from this patch to the points
        defined by the unique knots of @a patch. */
    void GetInterpolationMatrix(NURBSPatch &patch,
-                               SparseMatrix &R) const;
+                               SparseMatrix &X) const;
 
    /** @brief Given two patches @a p1 and @a p2 of the same dimensions, create
        and return a new patch by merging their knots and data. */
