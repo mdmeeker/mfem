@@ -170,6 +170,7 @@ int main(int argc, char *argv[])
       kv_ref[I]->GetInterpolant(x, u, cpts);
       cpts_ref[I].CopyFrom(cpts.GetData());
    }
+   Array<real_t> cpts_flat({0.0, 1.0}); // control points for flattened dimensions
 
    // 4. Create the patches
    Array<NURBSPatch*> patches(NP);
@@ -191,7 +192,15 @@ int main(int argc, char *argv[])
       // Collect the knot vectors for this patch
       for (int d = 0; d < dim; d++)
       {
-         kvs[d] = new KnotVector(*kv_ref[IJK[d]]);
+         if (d!=0 && flatdim)
+         {
+            // If flattened, make a basic 1st order knot vector
+            kvs[d] = new KnotVector(1, Vector({0.0, 1.0}));
+         }
+         else
+         {
+            kvs[d] = new KnotVector(*kv_ref[IJK[d]]);
+         }
          NCP[d] = kvs[d]->GetNCP();
       }
 
@@ -210,7 +219,8 @@ int main(int argc, char *argv[])
                // Set the control points (+ weight) for the LO mesh
                for (int d = 0; d < dim; d++)
                {
-                  control_points[pdim*dofidx + d] = cpts_ref[IJK[d]][ijk[d]];
+                  real_t c = (d!=0 && flatdim) ? cpts_flat[ijk[d]] : cpts_ref[IJK[d]][ijk[d]];
+                  control_points[pdim*dofidx + d] = c;
                }
                control_points[pdim*dofidx + dim] = 1.0; // weight
             }
