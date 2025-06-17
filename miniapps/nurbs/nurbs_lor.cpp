@@ -9,6 +9,110 @@
 using namespace std;
 using namespace mfem;
 
+class NURBSInterpolator
+{
+private:
+   const Mesh* ho_mesh; // High-order mesh
+   const Mesh* lo_mesh; // Low-order mesh
+   int NP; // Number of patches
+   int dim; // Topological dimension
+   int ho_Ndof; // Number of dofs in HO mesh
+   int lo_Ndof; // Number of dofs in LO mesh
+
+   Array2D<SparseMatrix*> X; // transfer matrices from HO->LO, per patch/dimension
+   Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
+
+   std::vector<Array<int>> ho_p2g; // Patch to global mapping for HO mesh
+   std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
+
+public:
+   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh) :
+      ho_mesh(ho_mesh),
+      lo_mesh(lo_mesh),
+      NP(ho_mesh->NURBSext->GetNP()),
+      dim(ho_mesh->NURBSext->Dimension()),
+      ho_Ndof(ho_mesh->NURBSext->GetNDof()),
+      lo_Ndof(lo_mesh->NURBSext->GetNDof())
+      {
+         // Basic checks
+         MFEM_VERIFY(ho_mesh->IsNURBS(), "HO mesh must be a NURBS mesh.")
+         MFEM_VERIFY(lo_mesh->IsNURBS(), "LO mesh must be a NURBS mesh.")
+         MFEM_VERIFY(NP == lo_mesh->NURBSext->GetNP(),
+                  "Meshes must have the same number of patches.");
+         MFEM_VERIFY(dim == lo_mesh->NURBSext->Dimension(),
+                  "Meshes must have the same topological dimension.");
+
+         // Collect X and R
+         X.SetSize(NP, dim);
+         R.SetSize(NP, dim);
+         for (int p = 0; p < NP; p++)
+         {
+            Array<const KnotVector*> ho_kvs(dim);
+            Array<const KnotVector*> lo_kvs(dim);
+            ho_mesh->NURBSext->GetPatchKnotVectors(p, ho_kvs);
+            lo_mesh->NURBSext->GetPatchKnotVectors(p, lo_kvs);
+            Vector u;
+            for (int d = 0; d < dim; d++)
+            {
+               lo_kvs[d]->GetUniqueKnots(u);
+               X(p, d) = new SparseMatrix(ho_kvs[d]->GetInterpolationMatrix(u));
+               X(p, d)->Finalize();
+               R(p, d) = new DenseMatrix(*X(p, d)->ToDenseMatrix());
+               R(p, d)->Invert();
+            }
+         }
+
+         // Collect patch to global mappings
+         ho_p2g.resize(NP);
+         lo_p2g.resize(NP);
+         for (int p = 0; p < NP; p++)
+         {
+            ho_mesh->NURBSext->GetPatchDofs(p, ho_p2g[p]);
+            lo_mesh->NURBSext->GetPatchDofs(p, lo_p2g[p]);
+         }
+      }
+
+   // Builds up the global transfer matrix: Xg[p] = kron(X[p,0], X[p,1], X[p,2]).
+   // Generally not needed over applying the action of R and R^T
+   // SparseMatrix GetXg() const
+   // {
+   //    SparseMatrix Xg(ho_Ndof, lo_Ndof);
+   //    for (int p = 0; p < NP; p++)
+   //    {
+   //       // Get Xp
+   //       // Xp = X(p,0) kron X(p,1) kron X(p,2)
+
+   //       SparseMatrix Xp(ho_p2g[p].Size(), lo_p2g[p].Size());
+   //       Array<int> cols;
+   //       for (int i = 0; i < lo_Ndof; i++)
+   //       {
+
+   //       }
+   //    }
+   //    return Xg;
+   // }
+
+   // Apply R using kronecker product
+   // void ApplyR(const Vector &x, Vector &y) const
+   // {
+   //    y.SetSize(lo_Ndof);
+   //    y = 0.0;
+   //    for (int p = 0; p < NP; p++)
+   //    {
+   //       for (int d = 0; d < dim; d++)
+   //       {
+   //          Vector x_patch(x.GetData() + p * lo_mesh->NURBSext->GetPatchNDof(d),
+   //                         lo_mesh->NURBSext->GetPatchNDof(d));
+   //          Vector y_patch(y.GetData() + p * ho_mesh->NURBSext->GetPatchNDof(d),
+   //                         ho_mesh->NURBSext->GetPatchNDof(d));
+   //          X(p, d)->Mult(x_patch, y_patch);
+   //       }
+   //    }
+   // }
+
+
+};
+
 
 int main(int argc, char *argv[])
 {
@@ -39,17 +143,72 @@ int main(int argc, char *argv[])
    cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
    cout << "getndof: " << mesh.NURBSext->GetNDof() << endl;
 
-   SparseMatrix* Rinv = new SparseMatrix(Ndof, Ndof);
-   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, Rinv);
-   Rinv->Finalize();
+   SparseMatrix* X = new SparseMatrix(Ndof, Ndof);
+   Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, X);
+   X->Finalize();
    if (printX)
    {
       ofstream X_ofs("X.txt");
       cout << "Printing matrix to X.txt" << endl;
-      Rinv->ToDenseMatrix()->PrintMatlab(X_ofs);
-      // Rinv->PrintMatlab(X_ofs);
+      X->ToDenseMatrix()->PrintMatlab(X_ofs);
+      // X->PrintMatlab(X_ofs);
    }
    cout << "Finished creating low-order mesh." << endl;
+
+   // Get dimension interpolation matrices: X1, X2, X3
+   const int tdim = mesh.NURBSext->Dimension();
+   Array<const KnotVector*> kvs(tdim);
+   Array<const KnotVector*> lo_kvs(tdim);
+   Array<Vector*> lo_uknots(tdim);
+   mesh.NURBSext->GetPatchKnotVectors(0, kvs);
+   lo_mesh.NURBSext->GetPatchKnotVectors(0, lo_kvs);
+
+   SparseMatrix X0 = kvs[0]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
+   X0.Finalize();
+   SparseMatrix X1 = kvs[1]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
+   X1.Finalize();
+   if (printX)
+   {
+      ofstream X0_ofs("X0.txt");
+      X0.ToDenseMatrix()->PrintMatlab(X0_ofs);
+      ofstream X1_ofs("X1.txt");
+      X1.ToDenseMatrix()->PrintMatlab(X1_ofs);
+   }
+
+   const int NP = 1;
+   Array<NURBSPatch*> patches(NP);
+   mesh.GetNURBSPatches(patches);
+   Array<NURBSPatch*> lo_patches(NP);
+   lo_mesh.GetNURBSPatches(lo_patches);
+   SparseMatrix Xp(16,16);
+   patches[0]->GetInterpolationMatrix(*lo_patches[0], Xp);
+   Xp.Finalize();
+   ofstream Xp_ofs("Xp.txt");
+   Xp.ToDenseMatrix()->PrintMatlab(Xp_ofs);
+
+   SparseMatrix* X01 = OuterProduct(X0,X1);
+   X01->Finalize();
+   ofstream X01_ofs("X01.txt");
+   X01->ToDenseMatrix()->PrintMatlab(X01_ofs);
+
+
+   // Create a NURBSInterpolator object
+   NURBSInterpolator interpolator(&mesh, &lo_mesh);
+
+
+   // for (int i = 0; i < tdim; i++)
+   // {
+   //    const int NUK = lo_kvs[i]->GetNUK();
+   //    cout << "NUK = " << NUK << endl;
+   //    lo_uknots[i]->SetSize(NUK);
+   //    lo_kvs[i]->GetUniqueKnots(*lo_uknots[i]);
+
+   //       (*kvs[d])[i] = kv.GetUniqueKnot(i);
+   // }
+   // kvs[0]->CalcShapes(*lo_kvs[0]->GetUni);
+
+
+
    // I think, this is the most correct interpolation, but it may not be ideal
    // for larger problems. Other options include
    //   - Form the LO -> HO interpolation matrix instead
@@ -57,7 +216,7 @@ int main(int argc, char *argv[])
    // matrix?
    // Another optimization here would be to invert the vdim==1 matrix and
    // construct the R matrix from that.
-   // DenseMatrix* R = Rinv->ToDenseMatrix();
+   // DenseMatrix* R = X->ToDenseMatrix();
    // R->PrintMatlab();
    // R->Invert();
 
@@ -75,7 +234,7 @@ int main(int argc, char *argv[])
                                                       Ordering::byVDIM);
    GridFunction lo_x(&lo_fespace);
    // lo_x = 0.0;
-   Rinv->Mult(x, lo_x);
+   X->Mult(x, lo_x);
    cout << "Finished creating low-order grid function." << endl;
 
 
