@@ -98,24 +98,28 @@ public:
          }
          if (dim >= 2)
          {
-            SparseMatrix* X01 = OuterProduct(*X(p, 0), *X(p, 1));
+            SparseMatrix* X01 = OuterProduct(*X(p, 1), *X(p, 0));
             X01->Finalize();
             Xp = X01;
          }
          if (dim == 3)
          {
-            SparseMatrix* X12 = OuterProduct(*X01, *X(p, 2));
+            SparseMatrix* X12 = OuterProduct(*X(p, 2), *X01);
             X12->Finalize();
             Xp = X12;
             delete X01;
          }
+
+         // Debugging
+         ofstream Xgp_ofs("Xgp.txt");
+         Xp->ToDenseMatrix()->PrintMatlab(Xgp_ofs);
 
          // Set values using patch -> global mapping
          Array<int> cols;
          Array<int> vcols;
          Vector srow;
          int rows = lo_p2g[p].Size();
-         Array<int> dofs(lo_p2g[p]);
+         Array<int> dofs(ho_p2g[p]);
          for (int r = 0; r < rows; r++)
          {
             Xp->GetRow(r, cols, srow);
@@ -225,7 +229,7 @@ int main(int argc, char *argv[])
    mesh.GetNURBSPatches(patches);
    Array<NURBSPatch*> lo_patches(NP);
    lo_mesh.GetNURBSPatches(lo_patches);
-   SparseMatrix Xp(16,16);
+   SparseMatrix Xp(8,8);
    patches[0]->GetInterpolationMatrix(*lo_patches[0], Xp);
    Xp.Finalize();
    ofstream Xp_ofs("Xp.txt");
@@ -236,10 +240,8 @@ int main(int argc, char *argv[])
    ofstream X01_ofs("X01.txt");
    X01->ToDenseMatrix()->PrintMatlab(X01_ofs);
 
-
    // Create a NURBSInterpolator object
    NURBSInterpolator interpolator(&mesh, &lo_mesh);
-
 
    SparseMatrix Xg = interpolator.GetXg();
    Xg.Finalize();
@@ -253,7 +255,6 @@ int main(int argc, char *argv[])
    //    cout << "NUK = " << NUK << endl;
    //    lo_uknots[i]->SetSize(NUK);
    //    lo_kvs[i]->GetUniqueKnots(*lo_uknots[i]);
-
    //       (*kvs[d])[i] = kv.GetUniqueKnot(i);
    // }
    // kvs[0]->CalcShapes(*lo_kvs[0]->GetUni);
