@@ -1033,6 +1033,82 @@ void KnotVector::FindMaxima(Array<int> &ks, Vector &xi, Vector &u) const
    }
 }
 
+void KnotVector::AssembleCollocationMatrix(Vector &u)
+{
+   int ncp = GetNCP();
+   int order = GetOrder();
+
+   MFEM_VERIFY(u.Size() == ncp,
+               "KnotVector::AssembleCollocationMatrix: "
+               "u.Size() must match the number of control points.");
+
+   // Get spans and refpoints associated with knots (u).
+   Vector xi_args(ncp);
+   Array<int> i_args(ncp);
+   for (int i = 0; i < ncp; i++)
+   {
+      i_args[i] = GetSpan(u[i]) - order;
+      xi_args[i] = GetRefPoint(u[i], i_args[i]+order);
+   }
+
+   // Assemble collocation matrix
+#ifdef MFEM_USE_LAPACK
+   // If using LAPACK, we use banded matrix storage (order + 1 nonzeros per row).
+   // Find banded structure of matrix.
+   int KL = 0; // Number of subdiagonals
+   int KU = 0; // Number of superdiagonals
+   for (int i = 0; i < ncp; i++)
+   {
+      for (int p = 0; p < order+1; p++)
+      {
+         const int col = i_args[i] + p;
+         if (col < i)
+         {
+            KL = std::max(KL, i - col);
+         }
+         else if (i < col)
+         {
+            KU = std::max(KU, col - i);
+         }
+      }
+   }
+
+   const int LDAB = (2*KL) + KU + 1;
+   const int N = ncp;
+
+   fact_AB.SetSize(LDAB, N);
+#else
+   // Without LAPACK, we store and invert a DenseMatrix (inefficient).
+   if (!reuse_inverse)
+   {
+      A_coll_inv.SetSize(ncp, ncp);
+      A_coll_inv = 0.0;
+   }
+#endif
+
+   Vector shape(order+1);
+
+   for (int i = 0; i < ncp; i++)
+   {
+      CalcShape(shape, i_args[i], xi_args[i]);
+      for (int p = 0; p < order+1; p++)
+      {
+         const int j = i_args[i] + p;
+#ifdef MFEM_USE_LAPACK
+         fact_AB(KL+KU+i-j,j) = shape[p];
+#else
+         A_coll_inv(i,j) = shape[p];
+#endif
+      }
+   }
+
+   // If built with LAPACK, also factorze the band matrix
+#ifdef MFEM_USE_LAPACK
+   BandedFactorize(KL, KU, fact_AB, fact_ipiv);
+#endif
+
+}
+
 // Routine from "The NURBS book" - 2nd ed - Piegl and Tiller
 // Algorithm A9.1 p. 369
 void KnotVector::FindInterpolant(Array<Vector*> &x)

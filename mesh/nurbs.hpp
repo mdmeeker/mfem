@@ -234,6 +234,8 @@ public:
        conjuction with GetSpan and GetRefPoint.*/
    MFEM_DEPRECATED void FindMaxima(Array<int> &ks, Vector &xi, Vector &u) const;
 
+   void AssembleCollocationMatrix(Vector &u);
+
    /** @brief Global curve interpolation through the points @a x (overwritten).
        @a x is an array with the length of the spatial dimension containing
        vectors with spatial coordinates. The control points of the interpolated
