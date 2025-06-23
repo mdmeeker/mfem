@@ -236,6 +236,8 @@ public:
 
    void AssembleCollocationMatrix(Vector &u);
 
+   void AssembleCollocationMatrix(NURBSInterpolationRule interp_rule);
+
    /** @brief Global curve interpolation through the points @a x (overwritten).
        @a x is an array with the length of the spatial dimension containing
        vectors with spatial coordinates. The control points of the interpolated
@@ -1105,6 +1107,8 @@ public:
        are instantiated, use Mesh::GetNURBSPatches() instead. Caller gets
        ownership of the returned object, and is responsible for deletion.*/
    void GetPatches(Array<NURBSPatch*> &patches);
+
+   void AssembleCollocationMatrix(NURBSInterpolationRule interp_rule);
 
    /// Return the array of indices of all elements in patch @a patch.
    const Array<int>& GetPatchElements(int patch);

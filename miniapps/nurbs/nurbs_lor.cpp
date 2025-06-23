@@ -212,6 +212,9 @@ int main(int argc, char *argv[])
    mesh.NURBSext->GetPatchKnotVectors(0, kvs);
    lo_mesh.NURBSext->GetPatchKnotVectors(0, lo_kvs);
 
+   mesh.NURBSext->AssembleCollocationMatrix(NURBSInterpolationRule::Botella);
+   kvs[0]->fact_AB.PrintMatlab(cout);
+
    SparseMatrix X0 = kvs[0]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
    X0.Finalize();
    SparseMatrix X1 = kvs[1]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);

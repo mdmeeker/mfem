@@ -4429,6 +4429,7 @@ void BandedFactorize(int KL, int KU, DenseMatrix &AB, Array<int> &ipiv)
    // Only defined for square matrices for now
    int M = N;
    int info;
+   ipiv.SetSize(N);
    MFEM_LAPACK_PREFIX(gbtrf_)(&M, &N, &KL, &KU, AB.GetData(), &LDAB,
                               ipiv.GetData(), &info);
    MFEM_ASSERT(info == 0, "BandedFactorize failed in LAPACK");

@@ -1109,6 +1109,12 @@ void KnotVector::AssembleCollocationMatrix(Vector &u)
 
 }
 
+void KnotVector::AssembleCollocationMatrix(NURBSInterpolationRule interp_rule)
+{
+   Vector u = GetInterpolationPoints(interp_rule);
+   AssembleCollocationMatrix(u);
+}
+
 // Routine from "The NURBS book" - 2nd ed - Piegl and Tiller
 // Algorithm A9.1 p. 369
 void KnotVector::FindInterpolant(Array<Vector*> &x)
@@ -5549,6 +5555,14 @@ void NURBSExtension::GetPatches(Array<NURBSPatch*> &patches_copy)
    for (int p = 0; p < NP; p++)
    {
       patches_copy[p] = new NURBSPatch(*GetPatch(p));
+   }
+}
+
+void NURBSExtension::AssembleCollocationMatrix(NURBSInterpolationRule interp_rule)
+{
+   for (int i = 0; i < NumOfKnotVectors; i++)
+   {
+      knotVectors[i]->AssembleCollocationMatrix(interp_rule);
    }
 }
 
