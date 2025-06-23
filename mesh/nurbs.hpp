@@ -346,6 +346,14 @@ public:
    /** Flag to indicate whether the KnotVector has been coarsened, which means
        it is ready for non-nested refinement. */
    bool coarse;
+
+#ifdef MFEM_USE_LAPACK
+   // Data for reusing banded matrix factorization in FindInterpolant().
+   DenseMatrix fact_AB; /// Banded matrix factorization
+   Array<int> fact_ipiv; /// Row pivot indices
+#else
+   DenseMatrix A_coll_inv; /// Collocation matrix inverse
+#endif
 };
 
 
