@@ -442,7 +442,6 @@ SparseMatrix KnotVector::GetInterpolationMatrix(const Vector &u) const
                "KnotVector::GetInterpolationMatrix : "
                "Evaluation knots must be contained within the knotvector.");
 
-   // const Vector newknots = GetInterpolationPoints(interp_rule);
    SparseMatrix X(u.Size(), NumOfControlPoints, Order+1);
 
    std::vector<KnotVector::ShapeValues> shapes = CalcShapes(u);
@@ -478,7 +477,6 @@ void KnotVector::GetUniqueKnots(Vector &uknots) const
 {
    // Get unique knots
    const int NUK = GetNUK();
-   mfem::out << "  size of unique knots: " << NUK << endl;
    uknots.SetSize(NUK);
    for (int i = 0; i < NUK; i++)
    {
@@ -5560,9 +5558,12 @@ void NURBSExtension::GetPatches(Array<NURBSPatch*> &patches_copy)
 
 void NURBSExtension::AssembleCollocationMatrix(NURBSInterpolationRule interp_rule)
 {
-   for (int i = 0; i < NumOfKnotVectors; i++)
+   // This should really be using the unique kvs (knotVectors) but
+   // knotVectorsCompr (which are completely different objects) seems
+   // to be what is used throughout
+   for (int i = 0; i < knotVectorsCompr.Size(); i++)
    {
-      knotVectors[i]->AssembleCollocationMatrix(interp_rule);
+      knotVectorsCompr[i]->AssembleCollocationMatrix(interp_rule);
    }
 }
 
