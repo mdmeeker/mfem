@@ -17,15 +17,15 @@ using namespace mfem;
 class KroneckerProduct
 {
 private:
-   std::vector<const DenseMatrix*> A;
+   Array<DenseMatrix*> A;
    int K;               // number of matrices
    Array<int> rows;     // sizes of each matrix
    Array<int> cols;
    int N;               // total number of rows
 public:
-   KroneckerProduct(const std::vector<const DenseMatrix*> &A_) : A(A_)
+   KroneckerProduct(const Array<DenseMatrix*> &A_) : A(A_)
    {
-      K = A.size();
+      K = A.Size();
       rows.SetSize(K);
       cols.SetSize(K);
       for (int k = 0; k < K; k++)
@@ -87,7 +87,7 @@ private:
 
    Array2D<SparseMatrix*> X; // transfer matrices from HO->LO, per patch/dimension
    Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
-   std::vector<KroneckerProduct*> kron; // Kronecker product actions for each patch
+   Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
 
    const FiniteElementSpace fespace; // Finite Element space for HO mesh
 
@@ -112,9 +112,10 @@ public:
          MFEM_VERIFY(dim == lo_mesh->NURBSext->Dimension(),
                   "Meshes must have the same topological dimension.");
 
-         // Collect X and R
+         // Collect X, R, and kron
          X.SetSize(NP, dim);
          R.SetSize(NP, dim);
+         kron.SetSize(NP);
          for (int p = 0; p < NP; p++)
          {
             Array<const KnotVector*> ho_kvs(dim);
@@ -132,11 +133,10 @@ public:
             }
 
             // Create classes for taking kron prod
-            // for (int d = dim-1; d)
-            // kron.push_back(new KroneckerProduct(
-            //    std::vector<const DenseMatrix*>
-
-
+            Array<DenseMatrix*> A(dim);
+            R.GetRow(p, A);
+            kron[p] = new KroneckerProduct(A);
+         }
 
          // Finite Element space
          const FiniteElementCollection* fec = ho_mesh->GetNodes()->OwnFEC();
@@ -153,7 +153,8 @@ public:
       }
 
    // Builds up the global transfer matrix: Xg[p] = kron(X[p,0], X[p,1], X[p,2]).
-   // Generally not needed over applying the action of R and R^T
+   // Generally this is pretty inefficient and is not needed other than for
+   // troubleshooting. Instead, directly apply the action of R and R^T
    SparseMatrix GetXg() const
    {
       SparseMatrix Xg(ho_Ndof, lo_Ndof);
@@ -183,8 +184,8 @@ public:
          }
 
          // Debugging
-         ofstream Xgp_ofs("Xgp.txt");
-         Xp->ToDenseMatrix()->PrintMatlab(Xgp_ofs);
+         // ofstream Xgp_ofs("Xgp.txt");
+         // Xp->ToDenseMatrix()->PrintMatlab(Xgp_ofs);
 
          // Set values using patch -> global mapping
          Array<int> cols;
@@ -215,25 +216,53 @@ public:
    }
 
    // Apply R using kronecker product
-   // void ApplyR(const Vector &x, Vector &y) const
-   // {
-   //    y.SetSize(lo_Ndof);
-   //    y = 0.0;
-   //    for (int p = 0; p < NP; p++)
-   //    {
-   //       for (int d = 0; d < dim; d++)
-   //       {
-   //          Vector x_patch(x.GetData() + p * lo_mesh->NURBSext->GetPatchNDof(d),
-   //                         lo_mesh->NURBSext->GetPatchNDof(d));
-   //          Vector y_patch(y.GetData() + p * ho_mesh->NURBSext->GetPatchNDof(d),
-   //                         ho_mesh->NURBSext->GetPatchNDof(d));
-   //          X(p, d)->Mult(x_patch, y_patch);
-   //       }
-   //    }
-   // }
+   void ApplyR(const GridFunction &x, GridFunction &y)
+   {
+      // x.HostRead();
+      cout << "A1" << endl;
+      Vector xp, yp;
+      y.SetSize(lo_Ndof);
+      y = 0.0;
+      cout << "B" << endl;
+      for (int p = 0; p < NP; p++)
+      {
+         cout << "C" << endl;
+         Array<int> vdofs;
+         fespace.GetPatchVDofs(p, vdofs);
+         cout << "D" << endl;
+
+         x.GetSubVector(vdofs, xp);
+         cout << "E" << endl;
+         kron[p]->Mult(xp, yp);
+         cout << "F" << endl;
+
+         y.SetSubVector(vdofs, yp);
+         cout << "G" << endl;
+      }
+   }
 
 
 };
+
+void Save(const char *filename, const GridFunction &x)
+{
+   ofstream ofs(filename);
+   ofs.precision(16);
+   x.Save(ofs);
+   cout << "Saved vector to " << filename << endl;
+}
+void Save(const char *filename, DenseMatrix *A)
+{
+   ofstream ofs(filename);
+   ofs.precision(16);
+   A->PrintMatlab(ofs);
+   cout << "Saved matrix to " << filename << endl;
+}
+void Save(const char *filename, SparseMatrix *A)
+{
+   if (!A->Finalized()) { A->Finalize(); }
+   Save(filename, A->ToDenseMatrix());
+}
 
 
 int main(int argc, char *argv[])
@@ -267,14 +296,7 @@ int main(int argc, char *argv[])
 
    SparseMatrix* X = new SparseMatrix(Ndof, Ndof);
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, X);
-   X->Finalize();
-   if (printX)
-   {
-      ofstream X_ofs("X.txt");
-      cout << "Printing matrix to X.txt" << endl;
-      X->ToDenseMatrix()->PrintMatlab(X_ofs);
-      // X->PrintMatlab(X_ofs);
-   }
+   if (printX) { Save("X.txt", X); }
    cout << "Finished creating low-order mesh." << endl;
 
    // Get dimension interpolation matrices: X1, X2, X3
@@ -289,17 +311,11 @@ int main(int argc, char *argv[])
    kvs[0]->fact_AB.PrintMatlab(cout);
 
    SparseMatrix X0 = kvs[0]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
-   X0.Finalize();
-   DenseMatrix X0d = *X0.ToDenseMatrix();
    SparseMatrix X1 = kvs[1]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
-   X1.Finalize();
-   DenseMatrix X1d = *X1.ToDenseMatrix();
    if (printX)
    {
-      ofstream X0_ofs("X0.txt");
-      X0d.PrintMatlab(X0_ofs);
-      ofstream X1_ofs("X1.txt");
-      X1d.PrintMatlab(X1_ofs);
+      Save("X0.txt", &X0);
+      Save("X1.txt", &X1);
    }
 
    const int NP = 1;
@@ -314,87 +330,53 @@ int main(int argc, char *argv[])
    // Xp.ToDenseMatrix()->PrintMatlab(Xp_ofs);
 
    SparseMatrix* X01 = OuterProduct(X0,X1);
-   X01->Finalize();
-   ofstream X01_ofs("X01.txt");
-   DenseMatrix X01d = *X01->ToDenseMatrix();
-   X01d.PrintMatlab(X01_ofs);
+   Save("X01.txt", X01);
 
    // Create a NURBSInterpolator object
    NURBSInterpolator interpolator(&mesh, &lo_mesh);
 
    SparseMatrix Xg = interpolator.GetXg();
-   ofstream Xg_ofs("Xg.txt");
-   DenseMatrix Xgd = *Xg.ToDenseMatrix();
-   Xgd.PrintMatlab(Xg_ofs);
-
+   Save("Xg.txt", &Xg);
 
    // Create a Kronecker product object
-   std::vector<const DenseMatrix*> A;
-   A.push_back(&X1d);
-   A.push_back(&X0d);
-   KroneckerProduct kronecker(A);
-   Vector x(Ndof);
-   for (int i = 0; i < Ndof; i++)
+   // Array<DenseMatrix*> A(2);
+   // A[0] = &X1d;
+   // A[1] = &X0d;
+   // KroneckerProduct kronecker(A);
+   // Vector x(Ndof);
+   // for (int i = 0; i < Ndof; i++)
+   // {
+   //    x[i] = 1.0 + i;
+   // }
+   // Vector y(Ndof);
+   // kronecker.Mult(x, y);
+   // y.Print();
+
+   GridFunction ho_x(&fespace);
+   ho_x = 0.0;
+   for (int i = 0; i < fespace.GetTrueVSize(); i++)
    {
-      x[i] = 1.0 + i;
+      // x(i) = 100.0 - (i-20.0)*(i-20.0); // example function
+      ho_x(i) = 1.0 + i;
    }
-   Vector y(Ndof);
-   kronecker.Mult(x, y);
-   y.Print();
+
+   // Create a GridFunction on the LO mesh
+   FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
+   FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec, vdim,
+                                                      Ordering::byVDIM);
+   GridFunction lo_x(&lo_fespace);
+   X->Mult(ho_x, lo_x);
+   cout << "Finished creating low-order grid function." << endl;
+
+   // Now compare with the results of NURBSInterpolator
+   GridFunction lo_x_interp(&lo_fespace);
+   interpolator.ApplyR(ho_x, lo_x_interp);
 
 
-
-   // for (int i = 0; i < tdim; i++)
-   // {
-   //    const int NUK = lo_kvs[i]->GetNUK();
-   //    cout << "NUK = " << NUK << endl;
-   //    lo_uknots[i]->SetSize(NUK);
-   //    lo_kvs[i]->GetUniqueKnots(*lo_uknots[i]);
-   //       (*kvs[d])[i] = kv.GetUniqueKnot(i);
-   // }
-   // kvs[0]->CalcShapes(*lo_kvs[0]->GetUni);
-
-
-
-   // I think, this is the most correct interpolation, but it may not be ideal
-   // for larger problems. Other options include
-   //   - Form the LO -> HO interpolation matrix instead
-   //   - Use a sparse factorization or iterative solve for R
-   // matrix?
-   // Another optimization here would be to invert the vdim==1 matrix and
-   // construct the R matrix from that.
-   // DenseMatrix* R = X->ToDenseMatrix();
-   // R->PrintMatlab();
-   // R->Invert();
-
-   // GridFunction x(&fespace);
-   // x = 0.0;
-   // for (int i = 0; i < fespace.GetTrueVSize(); i++)
-   // {
-   //    // x(i) = 100.0 - (i-20.0)*(i-20.0); // example function
-   //    x(i) = 1.0 + i;
-   // }
-
-   // // Create a GridFunction on the LO mesh
-   // FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
-   // FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec, vdim,
-   //                                                    Ordering::byVDIM);
-   // GridFunction lo_x(&lo_fespace);
-   // // lo_x = 0.0;
-   // X->Mult(x, lo_x);
-   // cout << "Finished creating low-order grid function." << endl;
-
-
-
-   // // ----- Write to file -----
-   // ofstream x_ofs("x.gf");
-   // x_ofs.precision(16);
-   // x.Save(x_ofs);
-
-   // ofstream lo_x_ofs("lo_x.gf");
-   // lo_x_ofs.precision(16);
-   // lo_x.Save(lo_x_ofs);
-
+   // ----- Write to file -----
+   Save("ho_x.gf", ho_x);
+   Save("lo_x.gf", lo_x);
+   // Save("lo_x_interp.gf", lo_x_interp);
 
    // Apply LO -> HO interpolation matrix
    // GridFunction x_recon(&lo_fespace);
