@@ -157,8 +157,11 @@ public:
          kron[p]->Mult(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
       }
+      cout << "x = ";
+      x.Print(cout, 100);
+      cout << "y = ";
+      y.Print(cout, 100);
    }
-
 
 };
 
@@ -263,63 +266,6 @@ int main(int argc, char *argv[])
    Save("ho_x.gf", ho_x);
    Save("lo_x.gf", lo_x);
    Save("x_recon.gf", x_recon);
-
-   // Apply LO -> HO interpolation matrix
-   // GridFunction x_recon(&lo_fespace);
-   // R->AddMult(lo_x, x_recon);
-   // cout << "Finished applying LO -> HO matrix." << endl;
-   // ofstream x_recon_ofs("x_recon.gf");
-   // x_recon_ofs.precision(16);
-   // x_recon.Save(x_recon_ofs);
-
-   // ----- Test GetInterpolationMatrix -----
-   // Build a patch from scratch
-   // const int tdim = 2;
-   // const int pdim = 2;
-   // Array<const KnotVector*> kvs(tdim);
-   // kvs[0] = new KnotVector(2, Vector({0.0, 1.0}));
-   // kvs[1] = new KnotVector(1, Vector({0.0, 1.0}));
-   // Vector control_points(
-   // {
-   //    0.0, 0.0, 1.0,
-   //    1.0, 0.0, 1.0,
-   //    2.0, 0.0, 1.0,
-   //    0.0, 1.0, 1.0,
-   //    1.0, 1.0, 1.0,
-   //    2.0, 1.0, 1.0,
-   // });
-   // NURBSPatch patch(kvs, pdim, control_points.GetData());
-
-   // // Define new knots
-   // Array<Vector *> uknots;
-   // uknots.SetSize(tdim);
-   // uknots[0] = new Vector({0.4, 0.80});
-   // uknots[1] = new Vector({0.3});
-
-   // // ----- Get the interpolation matrix R -----
-   // /** R should be a 4x6 matrix with values:
-   //     0.252  0.336  0.112  0.108  0.144  0.048
-   //     0.252  0.336  0.112  0.108  0.144  0.048
-   //     0.028  0.224  0.448  0.012  0.096  0.192
-   //     0.028  0.224  0.448  0.012  0.096  0.192
-   //  */
-   // SparseMatrix R(4,6);
-   // int vdim = 2;
-   // patch.GetInterpolationMatrix(R, uknots, vdim, 0, 0);
-   // R.Finalize();
-
-   // // Print as dense matrix
-   // cout << "R = " << endl;
-   // R.ToDenseMatrix()->PrintMatlab(cout);
-
-
-   // // Free memory
-   // for (int i = 0; i < tdim; i++)
-   // {
-   //    delete kvs[i];
-   //    delete uknots[i];
-   // }
-   // delete R;
 
    return 0;
 }

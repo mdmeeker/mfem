@@ -168,7 +168,6 @@ public:
       }
    }
 
-
 };
 
 enum class SplineIntegrationRule { FULL_GAUSSIAN, REDUCED_GAUSSIAN, };
