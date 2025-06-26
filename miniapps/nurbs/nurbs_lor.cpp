@@ -36,28 +36,29 @@ public:
       N = rows.Prod();
    }
 
-   void Mult(const Vector &x, Vector &y) const
+   void Mult(const Vector &x, Vector &y, bool transpose = false) const
    {
       MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
       y.SetSize(N);
       y = 0.0;
 
-      PotRwCl(K-1, 0, 0, 1.0, x, y);
+      PotRwCl(K-1, 0, 0, 1.0, x, y, transpose);
    }
 
    void PotRwCl(int k, long long r, long long c, real_t value,
-                         const Vector &x, Vector &y) const
+                         const Vector &x, Vector &y, bool transpose = false) const
    {
       const DenseMatrix &Ak = *A[k];
       for (int i = 0; i < rows[k]; i++)
       {
          for (int j = 0; j < cols[k]; j++)
          {
-            if (Ak(i, j) == 0) { continue; }
+            real_t a = transpose ? Ak(j, i) : Ak(i, j);
+            if (a == 0) { continue; }
 
             long long new_r = r * rows[k] + i;
             long long new_c = c * cols[k] + j;
-            real_t new_value = value * Ak(i, j);
+            real_t new_value = value * a;
 
             if (k == 0)
             {
@@ -65,7 +66,7 @@ public:
             }
             else
             {
-               PotRwCl(k - 1, new_r, new_c, new_value, x, y);
+               PotRwCl(k - 1, new_r, new_c, new_value, x, y, transpose);
             }
          }
       }
@@ -146,7 +147,7 @@ public:
    }
 
    // Apply R using kronecker product
-   void ApplyR(const Vector &x, Vector &y)
+   void ApplyR(const Vector &x, Vector &y, bool transpose = false)
    {
       Vector xp, yp;
       y.SetSize(ho_Ndof);
@@ -154,13 +155,9 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(lo_p2g[p], xp);
-         kron[p]->Mult(xp, yp);
+         kron[p]->Mult(xp, yp, transpose);
          y.SetSubVector(ho_p2g[p], yp);
       }
-      cout << "x = ";
-      x.Print(cout, 100);
-      cout << "y = ";
-      y.Print(cout, 100);
    }
 
 };
@@ -260,7 +257,7 @@ int main(int argc, char *argv[])
    // Now compare with the results of NURBSInterpolator
    GridFunction x_recon(&fespace);
 
-   interpolator.ApplyR(lo_x, x_recon);
+   interpolator.ApplyR(lo_x, x_recon, true);
 
    // ----- Write to file -----
    Save("ho_x.gf", ho_x);
