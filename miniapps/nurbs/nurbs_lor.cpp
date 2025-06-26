@@ -77,8 +77,8 @@ public:
 class NURBSInterpolator
 {
 private:
-   const Mesh* ho_mesh; // High-order mesh
-   const Mesh* lo_mesh; // Low-order mesh
+   Mesh* ho_mesh; // High-order mesh
+   Mesh* lo_mesh; // Low-order mesh
    int vdim; // Vector dimension (default 1)
    int NP; // Number of patches
    int dim; // Topological dimension
@@ -89,68 +89,68 @@ private:
    Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
    Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
 
-   const FiniteElementSpace fespace; // Finite Element space for HO mesh
+   FiniteElementSpace* fespace; // Finite Element space for HO mesh
 
    std::vector<Array<int>> ho_p2g; // Patch to global mapping for HO mesh
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
 
 public:
-   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, int vdim = 1) :
-      ho_mesh(ho_mesh),
-      lo_mesh(lo_mesh),
-      vdim(vdim),
+   NURBSInterpolator(Mesh* ho_mesh_, Mesh* lo_mesh_, int vdim_ = 1) :
+      ho_mesh(ho_mesh_),
+      lo_mesh(lo_mesh_),
+      vdim(vdim_),
       NP(ho_mesh->NURBSext->GetNP()),
       dim(ho_mesh->NURBSext->Dimension()),
       ho_Ndof(ho_mesh->NURBSext->GetNDof()),
       lo_Ndof(lo_mesh->NURBSext->GetNDof())
+   {
+      // Basic checks
+      MFEM_VERIFY(ho_mesh->IsNURBS(), "HO mesh must be a NURBS mesh.")
+      MFEM_VERIFY(lo_mesh->IsNURBS(), "LO mesh must be a NURBS mesh.")
+      MFEM_VERIFY(NP == lo_mesh->NURBSext->GetNP(),
+               "Meshes must have the same number of patches.");
+      MFEM_VERIFY(dim == lo_mesh->NURBSext->Dimension(),
+               "Meshes must have the same topological dimension.");
+
+      // Collect X, R, and kron
+      X.SetSize(NP, dim);
+      R.SetSize(NP, dim);
+      kron.SetSize(NP);
+      for (int p = 0; p < NP; p++)
       {
-         // Basic checks
-         MFEM_VERIFY(ho_mesh->IsNURBS(), "HO mesh must be a NURBS mesh.")
-         MFEM_VERIFY(lo_mesh->IsNURBS(), "LO mesh must be a NURBS mesh.")
-         MFEM_VERIFY(NP == lo_mesh->NURBSext->GetNP(),
-                  "Meshes must have the same number of patches.");
-         MFEM_VERIFY(dim == lo_mesh->NURBSext->Dimension(),
-                  "Meshes must have the same topological dimension.");
-
-         // Collect X, R, and kron
-         X.SetSize(NP, dim);
-         R.SetSize(NP, dim);
-         kron.SetSize(NP);
-         for (int p = 0; p < NP; p++)
+         Array<const KnotVector*> ho_kvs(dim);
+         Array<const KnotVector*> lo_kvs(dim);
+         ho_mesh->NURBSext->GetPatchKnotVectors(p, ho_kvs);
+         lo_mesh->NURBSext->GetPatchKnotVectors(p, lo_kvs);
+         Vector u;
+         for (int d = 0; d < dim; d++)
          {
-            Array<const KnotVector*> ho_kvs(dim);
-            Array<const KnotVector*> lo_kvs(dim);
-            ho_mesh->NURBSext->GetPatchKnotVectors(p, ho_kvs);
-            lo_mesh->NURBSext->GetPatchKnotVectors(p, lo_kvs);
-            Vector u;
-            for (int d = 0; d < dim; d++)
-            {
-               lo_kvs[d]->GetUniqueKnots(u);
-               X(p, d) = new SparseMatrix(ho_kvs[d]->GetInterpolationMatrix(u));
-               X(p, d)->Finalize();
-               R(p, d) = new DenseMatrix(*X(p, d)->ToDenseMatrix());
-               R(p, d)->Invert();
-            }
-
-            // Create classes for taking kron prod
-            Array<DenseMatrix*> A(dim);
-            R.GetRow(p, A);
-            kron[p] = new KroneckerProduct(A);
+            lo_kvs[d]->GetUniqueKnots(u);
+            X(p, d) = new SparseMatrix(ho_kvs[d]->GetInterpolationMatrix(u));
+            X(p, d)->Finalize();
+            R(p, d) = new DenseMatrix(*X(p, d)->ToDenseMatrix());
+            R(p, d)->Invert();
          }
 
-         // Finite Element space
-         const FiniteElementCollection* fec = ho_mesh->GetNodes()->OwnFEC();
-         const FiniteElementSpace fespace = FiniteElementSpace(ho_mesh, fec, vdim, Ordering::byVDIM);
-
-         // Collect patch to global mappings
-         ho_p2g.resize(NP);
-         lo_p2g.resize(NP);
-         for (int p = 0; p < NP; p++)
-         {
-            ho_mesh->NURBSext->GetPatchDofs(p, ho_p2g[p]);
-            lo_mesh->NURBSext->GetPatchDofs(p, lo_p2g[p]);
-         }
+         // Create classes for taking kron prod
+         Array<DenseMatrix*> A(dim);
+         R.GetRow(p, A);
+         kron[p] = new KroneckerProduct(A);
       }
+
+      // Finite Element space
+      FiniteElementCollection* fec = ho_mesh->GetNodes()->OwnFEC();
+      fespace = new FiniteElementSpace(ho_mesh, fec, vdim, Ordering::byVDIM);
+
+      // Collect patch to global mappings
+      ho_p2g.resize(NP);
+      lo_p2g.resize(NP);
+      for (int p = 0; p < NP; p++)
+      {
+         ho_mesh->NURBSext->GetPatchDofs(p, ho_p2g[p]);
+         lo_mesh->NURBSext->GetPatchDofs(p, lo_p2g[p]);
+      }
+   }
 
    // Builds up the global transfer matrix: Xg[p] = kron(X[p,0], X[p,1], X[p,2]).
    // Generally this is pretty inefficient and is not needed other than for
@@ -205,8 +205,8 @@ public:
             for (int vd = 0; vd < vdim; vd++)
             {
                vcols = cols;
-               fespace.DofsToVDofs(vd, vcols);
-               int vdrow = fespace.DofToVDof(dofs[r], vd);
+               fespace->DofsToVDofs(vd, vcols);
+               int vdrow = fespace->DofToVDof(dofs[r], vd);
                Xg.SetRow(vdrow, vcols, srow);
             }
          }
@@ -216,28 +216,20 @@ public:
    }
 
    // Apply R using kronecker product
-   void ApplyR(const GridFunction &x, GridFunction &y)
+   void ApplyR(const Vector &x, Vector &y)
    {
-      // x.HostRead();
-      cout << "A1" << endl;
       Vector xp, yp;
       y.SetSize(lo_Ndof);
       y = 0.0;
-      cout << "B" << endl;
       for (int p = 0; p < NP; p++)
       {
-         cout << "C" << endl;
          Array<int> vdofs;
-         fespace.GetPatchVDofs(p, vdofs);
-         cout << "D" << endl;
+         fespace->GetPatchVDofs(p, vdofs);
 
          x.GetSubVector(vdofs, xp);
-         cout << "E" << endl;
          kron[p]->Mult(xp, yp);
-         cout << "F" << endl;
 
          y.SetSubVector(vdofs, yp);
-         cout << "G" << endl;
       }
    }
 
@@ -376,7 +368,7 @@ int main(int argc, char *argv[])
    // ----- Write to file -----
    Save("ho_x.gf", ho_x);
    Save("lo_x.gf", lo_x);
-   // Save("lo_x_interp.gf", lo_x_interp);
+   Save("lo_x_interp.gf", lo_x_interp);
 
    // Apply LO -> HO interpolation matrix
    // GridFunction x_recon(&lo_fespace);
