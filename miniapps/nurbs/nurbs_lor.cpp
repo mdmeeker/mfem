@@ -42,7 +42,7 @@ public:
       y.SetSize(N);
       y = 0.0;
 
-      PotRwCl(0, 0, 0, 1.0, x, y);
+      PotRwCl(K-1, 0, 0, 1.0, x, y);
    }
 
    void PotRwCl(int k, long long r, long long c, real_t value,
@@ -59,13 +59,13 @@ public:
             long long new_c = c * cols[k] + j;
             real_t new_value = value * Ak(i, j);
 
-            if (k == K - 1)
+            if (k == 0)
             {
                y[new_r] += new_value * x[new_c];
             }
             else
             {
-               PotRwCl(k + 1, new_r, new_c, new_value, x, y);
+               PotRwCl(k - 1, new_r, new_c, new_value, x, y);
             }
          }
       }
@@ -193,6 +193,7 @@ public:
          Vector srow;
          int rows = lo_p2g[p].Size();
          Array<int> dofs(ho_p2g[p]);
+
          for (int r = 0; r < rows; r++)
          {
             Xp->GetRow(r, cols, srow);
@@ -219,7 +220,7 @@ public:
    void ApplyR(const Vector &x, Vector &y)
    {
       Vector xp, yp;
-      y.SetSize(lo_Ndof);
+      y.SetSize(ho_Ndof);
       y = 0.0;
       for (int p = 0; p < NP; p++)
       {
@@ -300,7 +301,6 @@ int main(int argc, char *argv[])
    lo_mesh.NURBSext->GetPatchKnotVectors(0, lo_kvs);
 
    mesh.NURBSext->AssembleCollocationMatrix(NURBSInterpolationRule::Botella);
-   kvs[0]->fact_AB.PrintMatlab(cout);
 
    SparseMatrix X0 = kvs[0]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
    SparseMatrix X1 = kvs[1]->GetInterpolationMatrix(NURBSInterpolationRule::Botella);
@@ -315,11 +315,6 @@ int main(int argc, char *argv[])
    mesh.GetNURBSPatches(patches);
    Array<NURBSPatch*> lo_patches(NP);
    lo_mesh.GetNURBSPatches(lo_patches);
-   // SparseMatrix Xp(8,8);
-   // patches[0]->GetInterpolationMatrix(*lo_patches[0], Xp);
-   // Xp.Finalize();
-   // ofstream Xp_ofs("Xp.txt");
-   // Xp.ToDenseMatrix()->PrintMatlab(Xp_ofs);
 
    SparseMatrix* X01 = OuterProduct(X0,X1);
    Save("X01.txt", X01);
@@ -330,25 +325,11 @@ int main(int argc, char *argv[])
    SparseMatrix Xg = interpolator.GetXg();
    Save("Xg.txt", &Xg);
 
-   // Create a Kronecker product object
-   // Array<DenseMatrix*> A(2);
-   // A[0] = &X1d;
-   // A[1] = &X0d;
-   // KroneckerProduct kronecker(A);
-   // Vector x(Ndof);
-   // for (int i = 0; i < Ndof; i++)
-   // {
-   //    x[i] = 1.0 + i;
-   // }
-   // Vector y(Ndof);
-   // kronecker.Mult(x, y);
-   // y.Print();
-
    GridFunction ho_x(&fespace);
    ho_x = 0.0;
    for (int i = 0; i < fespace.GetTrueVSize(); i++)
    {
-      // x(i) = 100.0 - (i-20.0)*(i-20.0); // example function
+      // ho_x(i) = 100.0 - (i-10.0)*(i-10.0); // example function
       ho_x(i) = 1.0 + i;
    }
 
@@ -361,14 +342,14 @@ int main(int argc, char *argv[])
    cout << "Finished creating low-order grid function." << endl;
 
    // Now compare with the results of NURBSInterpolator
-   GridFunction lo_x_interp(&lo_fespace);
-   interpolator.ApplyR(ho_x, lo_x_interp);
+   GridFunction x_recon(&fespace);
 
+   interpolator.ApplyR(lo_x, x_recon);
 
    // ----- Write to file -----
    Save("ho_x.gf", ho_x);
    Save("lo_x.gf", lo_x);
-   Save("lo_x_interp.gf", lo_x_interp);
+   Save("x_recon.gf", x_recon);
 
    // Apply LO -> HO interpolation matrix
    // GridFunction x_recon(&lo_fespace);
