@@ -2450,10 +2450,6 @@ public:
                              int vdim = 1,
                              SparseMatrix* R = nullptr);
 
-   /** @brief Builds up an interpolation matrix patch-by-patch using
-              the unique knots of @a target_mesh as interpolation points */
-   SparseMatrix GetNURBSInterpolationMatrix(Mesh &target_mesh, int vdim=1);
-
    /// @name Print/Save/Export methods
    /// @{
 

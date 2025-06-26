@@ -73,7 +73,6 @@ public:
 };
 
 
-
 class NURBSInterpolator
 {
 private:
@@ -88,8 +87,6 @@ private:
    Array2D<SparseMatrix*> X; // transfer matrices from HO->LO, per patch/dimension
    Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
    Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
-
-   FiniteElementSpace* fespace; // Finite Element space for HO mesh
 
    std::vector<Array<int>> ho_p2g; // Patch to global mapping for HO mesh
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
@@ -138,10 +135,6 @@ public:
          kron[p] = new KroneckerProduct(A);
       }
 
-      // Finite Element space
-      FiniteElementCollection* fec = ho_mesh->GetNodes()->OwnFEC();
-      fespace = new FiniteElementSpace(ho_mesh, fec, vdim, Ordering::byVDIM);
-
       // Collect patch to global mappings
       ho_p2g.resize(NP);
       lo_p2g.resize(NP);
@@ -152,70 +145,6 @@ public:
       }
    }
 
-   // Builds up the global transfer matrix: Xg[p] = kron(X[p,0], X[p,1], X[p,2]).
-   // Generally this is pretty inefficient and is not needed other than for
-   // troubleshooting. Instead, directly apply the action of R and R^T
-   SparseMatrix GetXg() const
-   {
-      SparseMatrix Xg(ho_Ndof, lo_Ndof);
-      for (int p = 0; p < NP; p++)
-      {
-         // Get Xp = X(p,0) kron X(p,1) kron X(p,2)
-         SparseMatrix* Xp = nullptr;
-         SparseMatrix* X01 = nullptr;
-         SparseMatrix* X12 = nullptr;
-         if (dim == 1)
-         {
-            SparseMatrix* Xp = new SparseMatrix(*X(p, 0));
-            Xp->Finalize();
-         }
-         if (dim >= 2)
-         {
-            SparseMatrix* X01 = OuterProduct(*X(p, 1), *X(p, 0));
-            X01->Finalize();
-            Xp = X01;
-         }
-         if (dim == 3)
-         {
-            SparseMatrix* X12 = OuterProduct(*X(p, 2), *X01);
-            X12->Finalize();
-            Xp = X12;
-            delete X01;
-         }
-
-         // Debugging
-         // ofstream Xgp_ofs("Xgp.txt");
-         // Xp->ToDenseMatrix()->PrintMatlab(Xgp_ofs);
-
-         // Set values using patch -> global mapping
-         Array<int> cols;
-         Array<int> vcols;
-         Vector srow;
-         int rows = lo_p2g[p].Size();
-         Array<int> dofs(ho_p2g[p]);
-
-         for (int r = 0; r < rows; r++)
-         {
-            Xp->GetRow(r, cols, srow);
-
-            for (int i=0; i<cols.Size(); ++i)
-            {
-               cols[i] = dofs[cols[i]];
-            }
-
-            for (int vd = 0; vd < vdim; vd++)
-            {
-               vcols = cols;
-               fespace->DofsToVDofs(vd, vcols);
-               int vdrow = fespace->DofToVDof(dofs[r], vd);
-               Xg.SetRow(vdrow, vcols, srow);
-            }
-         }
-      }
-      Xg.Finalize();
-      return Xg;
-   }
-
    // Apply R using kronecker product
    void ApplyR(const Vector &x, Vector &y)
    {
@@ -224,13 +153,9 @@ public:
       y = 0.0;
       for (int p = 0; p < NP; p++)
       {
-         Array<int> vdofs;
-         fespace->GetPatchVDofs(p, vdofs);
-
-         x.GetSubVector(vdofs, xp);
+         x.GetSubVector(lo_p2g[p], xp);
          kron[p]->Mult(xp, yp);
-
-         y.SetSubVector(vdofs, yp);
+         y.SetSubVector(ho_p2g[p], yp);
       }
    }
 
@@ -310,20 +235,8 @@ int main(int argc, char *argv[])
       Save("X1.txt", &X1);
    }
 
-   const int NP = 1;
-   Array<NURBSPatch*> patches(NP);
-   mesh.GetNURBSPatches(patches);
-   Array<NURBSPatch*> lo_patches(NP);
-   lo_mesh.GetNURBSPatches(lo_patches);
-
-   SparseMatrix* X01 = OuterProduct(X0,X1);
-   Save("X01.txt", X01);
-
    // Create a NURBSInterpolator object
    NURBSInterpolator interpolator(&mesh, &lo_mesh);
-
-   SparseMatrix Xg = interpolator.GetXg();
-   Save("Xg.txt", &Xg);
 
    GridFunction ho_x(&fespace);
    ho_x = 0.0;

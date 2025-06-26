@@ -6259,11 +6259,6 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
          int N = ho_patches[p]->GetNCP();
          SparseMatrix smat(N, N);
          ho_patches[p]->GetInterpolationMatrix(*lo_patches[p], smat);
-         // Debugging
-         // smat.Finalize();
-         // mfem::out << "Interpolation matrix for patch " << p << endl;
-         // smat.ToDenseMatrix()->PrintMatlab(mfem::out);
-         // mfem::out << endl;
          Array<int> dofs;
          NURBSext->GetPatchDofs(p, dofs);
 
@@ -6279,26 +6274,13 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
             {
                cols[i] = dofs[cols[i]];
             }
-            // mfem::out << "cols = " << endl;
-            // cols.Print(mfem::out, 20);
 
             for (int vd = 0; vd < vdim; vd++)
             {
                vcols = cols;
                fespace.DofsToVDofs(vd, vcols);
-               // mfem::out << "vdof cols = " << endl;
-               // vcols.Print(mfem::out, 20);
                int vdrow = fespace.DofToVDof(dofs[r], vd);
                R->SetRow(vdrow, vcols, srow);
-               // Debugging
-               // mfem::out << "patch = " << p
-               //           << ", r = " << r
-               //           << ", vd = " << vd
-               //           << ", dof = " << dofs[r]
-               //           << ", vdrow = " << vdrow
-               //           << ", cols = ";
-               // vcols.Print(mfem::out, 20);
-               // mfem::out << endl;
             }
          }
       }
@@ -6309,64 +6291,6 @@ Mesh Mesh::GetLowOrderNURBSMesh(NURBSInterpolationRule interp_rule, int vdim, Sp
    NURBSExtension ext(&patchtopo, lo_patches);
 
    return Mesh(ext);
-}
-
-SparseMatrix Mesh::GetNURBSInterpolationMatrix(Mesh &target_mesh, int vdim)
-{
-   MFEM_VERIFY(IsNURBS(), "Must be a NURBS mesh.")
-   MFEM_VERIFY(target_mesh.IsNURBS(), "Input mesh must be a NURBS mesh.")
-
-   const int NP = NURBSext->GetNP();
-   const int dim = NURBSext->Dimension();
-
-   MFEM_VERIFY(NP == target_mesh.NURBSext->GetNP(),
-              "Meshes must have the same number of patches.");
-   MFEM_VERIFY(dim == target_mesh.NURBSext->Dimension(),
-              "Meshes must have the same topological dimension.");
-
-   // Initialize global matrix
-   mfem::out << "Mesh::GetNURBSInterpolationMatrix : " << endl;
-   mfem::out << "nrows = " << target_mesh.NURBSext->GetNV()
-             << ", ncols = " << NURBSext->GetNDof() << endl;
-   SparseMatrix R(target_mesh.NURBSext->GetNV(), NURBSext->GetNDof());
-
-   Array<NURBSPatch*> patches(NP);
-   GetNURBSPatches(patches);
-   Array<NURBSPatch*> target_patches(NP);
-   target_mesh.GetNURBSPatches(target_patches);
-   Array<int> dofs;
-   Array<int> target_dofs;
-
-   // Combine contributions from each patch
-   for (int p = 0; p < NP; p++)
-   {
-      int nrows = target_patches[p]->GetNUK();
-      int ncols = patches[p]->GetNCP();
-      SparseMatrix smat(nrows, ncols);
-
-      // Get the (cartesian-ordered) patch interpolation matrix
-      patches[p]->GetInterpolationMatrix(*target_patches[p], smat);
-
-      // Set contributions in the global matrix - apply dof ordering
-      // target_mesh.do
-
-      NURBSext->GetPatchDofs(p, dofs);
-      target_mesh.NURBSext->GetPatchDofs(p, target_dofs);
-      Array<int> cols;
-      Vector srow;
-      for (int r=0; r<nrows; ++r)
-      {
-         smat.GetRow(r, cols, srow);
-         for (int i=0; i<cols.Size(); ++i)
-         {
-            cols[i] = dofs[cols[i]];
-         }
-         R.SetRow(target_dofs[r], cols, srow);
-      }
-   }
-
-   R.Finalize();
-   return R;
 }
 
 void Mesh::LoadPatchTopo(std::istream &input, Array<int> &edge_to_ukv)
