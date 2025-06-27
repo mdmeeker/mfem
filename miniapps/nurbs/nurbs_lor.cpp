@@ -9,6 +9,7 @@
 using namespace std;
 using namespace mfem;
 
+
 // Class for applying the action of a Kronecker product using the
 // Pot-RwCl algorithm
 //
@@ -36,17 +37,24 @@ public:
       N = rows.Prod();
    }
 
-   void Mult(const Vector &x, Vector &y, bool transpose = false) const
+   void Mult(const Vector &x, Vector &y) const
    {
       MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
       y.SetSize(N);
       y = 0.0;
-
-      PotRwCl(K-1, 0, 0, 1.0, x, y, transpose);
+      PotRwCl(K-1, 0, 0, 1.0, x, y, false);
    }
 
-   void PotRwCl(int k, long long r, long long c, real_t value,
-                         const Vector &x, Vector &y, bool transpose = false) const
+   void MultTranspose(const Vector &x, Vector &y) const
+   {
+      MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
+      y.SetSize(N);
+      y = 0.0;
+      PotRwCl(K-1, 0, 0, 1.0, x, y, true);
+   }
+
+   void PotRwCl(int k, int r, int c, real_t value,
+                const Vector &x, Vector &y, bool transpose = false) const
    {
       const DenseMatrix &Ak = *A[k];
       for (int i = 0; i < rows[k]; i++)
@@ -56,8 +64,8 @@ public:
             real_t a = transpose ? Ak(j, i) : Ak(i, j);
             if (a == 0) { continue; }
 
-            long long new_r = r * rows[k] + i;
-            long long new_c = c * cols[k] + j;
+            int new_r = r * rows[k] + i;
+            int new_c = c * cols[k] + j;
             real_t new_value = value * a;
 
             if (k == 0)
@@ -93,10 +101,10 @@ private:
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
 
 public:
-   NURBSInterpolator(Mesh* ho_mesh_, Mesh* lo_mesh_, int vdim_ = 1) :
-      ho_mesh(ho_mesh_),
-      lo_mesh(lo_mesh_),
-      vdim(vdim_),
+   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, int vdim = 1) :
+      ho_mesh(ho_mesh),
+      lo_mesh(lo_mesh),
+      vdim(vdim),
       NP(ho_mesh->NURBSext->GetNP()),
       dim(ho_mesh->NURBSext->Dimension()),
       ho_Ndof(ho_mesh->NURBSext->GetNDof()),
@@ -147,7 +155,7 @@ public:
    }
 
    // Apply R using kronecker product
-   void ApplyR(const Vector &x, Vector &y, bool transpose = false)
+   void Mult(const Vector &x, Vector &y)
    {
       Vector xp, yp;
       y.SetSize(ho_Ndof);
@@ -155,8 +163,22 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(lo_p2g[p], xp);
-         kron[p]->Mult(xp, yp, transpose);
+         kron[p]->Mult(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
+      }
+   }
+
+   // Apply R^T using kronecker product
+   void MultTranspose(const Vector &x, Vector &y)
+   {
+      Vector xp, yp;
+      y.SetSize(lo_Ndof);
+      y = 0.0;
+      for (int p = 0; p < NP; p++)
+      {
+         x.GetSubVector(ho_p2g[p], xp);
+         kron[p]->MultTranspose(xp, yp);
+         y.SetSubVector(lo_p2g[p], yp);
       }
    }
 
@@ -210,7 +232,6 @@ int main(int argc, char *argv[])
    cout << "Number of finite element unknowns: " << Ndof << endl;
    cout << "Number of elements: " << fespace.GetNE() << endl;
    cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
-   cout << "getndof: " << mesh.NURBSext->GetNDof() << endl;
 
    SparseMatrix* X = new SparseMatrix(Ndof, Ndof);
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, X);
@@ -257,7 +278,7 @@ int main(int argc, char *argv[])
    // Now compare with the results of NURBSInterpolator
    GridFunction x_recon(&fespace);
 
-   interpolator.ApplyR(lo_x, x_recon, true);
+   interpolator.Mult(lo_x, x_recon);
 
    // ----- Write to file -----
    Save("ho_x.gf", ho_x);

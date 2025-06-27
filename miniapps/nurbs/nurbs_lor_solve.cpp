@@ -45,17 +45,24 @@ public:
       N = rows.Prod();
    }
 
-   void Mult(const Vector &x, Vector &y, bool transpose = false) const
+   void Mult(const Vector &x, Vector &y) const
    {
       MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
       y.SetSize(N);
       y = 0.0;
-
-      PotRwCl(K-1, 0, 0, 1.0, x, y, transpose);
+      PotRwCl(K-1, 0, 0, 1.0, x, y, false);
    }
 
-   void PotRwCl(int k, long long r, long long c, real_t value,
-                         const Vector &x, Vector &y, bool transpose = false) const
+   void MultTranspose(const Vector &x, Vector &y) const
+   {
+      MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
+      y.SetSize(N);
+      y = 0.0;
+      PotRwCl(K-1, 0, 0, 1.0, x, y, true);
+   }
+
+   void PotRwCl(int k, int r, int c, real_t value,
+                const Vector &x, Vector &y, bool transpose = false) const
    {
       const DenseMatrix &Ak = *A[k];
       for (int i = 0; i < rows[k]; i++)
@@ -65,8 +72,8 @@ public:
             real_t a = transpose ? Ak(j, i) : Ak(i, j);
             if (a == 0) { continue; }
 
-            long long new_r = r * rows[k] + i;
-            long long new_c = c * cols[k] + j;
+            int new_r = r * rows[k] + i;
+            int new_c = c * cols[k] + j;
             real_t new_value = value * a;
 
             if (k == 0)
@@ -102,10 +109,10 @@ private:
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
 
 public:
-   NURBSInterpolator(Mesh* ho_mesh_, Mesh* lo_mesh_, int vdim_ = 1) :
-      ho_mesh(ho_mesh_),
-      lo_mesh(lo_mesh_),
-      vdim(vdim_),
+   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, int vdim = 1) :
+      ho_mesh(ho_mesh),
+      lo_mesh(lo_mesh),
+      vdim(vdim),
       NP(ho_mesh->NURBSext->GetNP()),
       dim(ho_mesh->NURBSext->Dimension()),
       ho_Ndof(ho_mesh->NURBSext->GetNDof()),
@@ -156,7 +163,7 @@ public:
    }
 
    // Apply R using kronecker product
-   void ApplyR(const Vector &x, Vector &y, bool transpose = false)
+   void Mult(const Vector &x, Vector &y)
    {
       Vector xp, yp;
       y.SetSize(ho_Ndof);
@@ -164,8 +171,22 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(lo_p2g[p], xp);
-         kron[p]->Mult(xp, yp, transpose);
+         kron[p]->Mult(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
+      }
+   }
+
+   // Apply R^T using kronecker product
+   void MultTranspose(const Vector &x, Vector &y)
+   {
+      Vector xp, yp;
+      y.SetSize(lo_Ndof);
+      y = 0.0;
+      for (int p = 0; p < NP; p++)
+      {
+         x.GetSubVector(ho_p2g[p], xp);
+         kron[p]->MultTranspose(xp, yp);
+         y.SetSubVector(lo_p2g[p], yp);
       }
    }
 
@@ -176,118 +197,70 @@ void SetPatchIntegrationRules(const Mesh &mesh,
                               const SplineIntegrationRule &splineRule,
                               BilinearFormIntegrator * bfi);
 
-class MyTripleProductOperator : public Operator
+class R_A_Rt : public Operator
 {
 private:
+   // const Operator *R;
+   NURBSInterpolator *R;
    const Operator *A;
-   const Operator *B;
-   const Operator *C;
    mutable Vector t1, t2;
    MemoryClass mem_class;
 
 public:
-   MyTripleProductOperator(const Operator *A, const Operator *B,
-                           const Operator *C)
-   : Operator(A->Height(), C->Width())
-   , A(A), B(B), C(C)
+   R_A_Rt(NURBSInterpolator *R, const Operator *A)
+   : Operator(A->Height(), A->Width())
+   , R(R), A(A)
    {
-      mem_class = A->GetMemoryClass()*C->GetMemoryClass();
-      MemoryType mem_type = GetMemoryType(mem_class*B->GetMemoryClass());
-      t1.SetSize(C->Height(), mem_type);
-      t2.SetSize(B->Height(), mem_type);
+      mem_class = A->GetMemoryClass();//*C->GetMemoryClass();
+      MemoryType mem_type = GetMemoryType(mem_class);
+      t1.SetSize(A->Height(), mem_type);
+      t2.SetSize(A->Height(), mem_type);
    }
 
    MemoryClass GetMemoryClass() const override { return mem_class; }
 
    void Mult(const Vector &x, Vector &y) const override
-   { C->Mult(x, t1); B->Mult(t1, t2); A->Mult(t2, y); }
+   { R->MultTranspose(x, t1); A->Mult(t1, t2); R->Mult(t2, y); }
 
-   // virtual ~MyTripleProductOperator();
+   // ~R_A_Rt() override;
 };
 
 class NURBSLORPreconditioner : public Solver
 {
 private:
-   const SparseMatrix* X; // transfer matrix from HO->LO
-   const SparseMatrix* Xt; // transpose of X
-   const Operator* R; // transfer operator from LO->HO
-   const Operator* Rt; // transfer operator from HO->LO (dual)
-   const Operator* A; // AMG on LO dofs
-   MyTripleProductOperator* R_A_Rt;
-   const ConstrainedOperator* R_A_Rt_constrained;
+   NURBSInterpolator* R;   // transfer operator from LO->HO
+   const Operator* A;      // AMG on LO dofs
+
+   R_A_Rt* op;
+   const ConstrainedOperator* opcon;
 
 public:
+   // NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh);
+   // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(mesh, lo_mesh, ess_tdof_list, lo_P);
    NURBSLORPreconditioner(
-      const Solver* R_,
-      const Solver* Rt_,
+      Mesh* ho_mesh,
+      Mesh* lo_mesh,
       const Array<int> & ess_tdof_list,
       const HypreBoomerAMG* A_)
    : Solver(A_->Height(), A_->Width(), false)
-   , R(R_), Rt(Rt_), A(A_)
+   , A(A_)
    {
-      MFEM_VERIFY(R->Height() == R->Width(), "R must be square");
-      MFEM_VERIFY(A->Height() == A->Width(), "A must be square");
-      MFEM_VERIFY(R->Height() == A->Height(),
-                  "R and A must have the same dimensions");
+      NURBSInterpolator* R = new NURBSInterpolator(ho_mesh, lo_mesh);
 
-      R_A_Rt = new MyTripleProductOperator(R, A, Rt);
-      R_A_Rt_constrained = new ConstrainedOperator(
-                              R_A_Rt, ess_tdof_list);
+      op = new R_A_Rt(R, A);
+      opcon = new ConstrainedOperator(op, ess_tdof_list);
    }
 
    // y = P x = R A^-1 R^T x
    void Mult(const Vector &x, Vector &y) const
    {
       // y = 0.0;
-      // Vector z(R->Height());  // Temp vector
-      // Rt->Mult(x, y);         // y = R^T x
-      // A->Mult(y, z);          // z = A^-1 * R^T x
-      // R->Mult(z, y);          // y = R * A^-1 * R^T x
-
-      R_A_Rt_constrained->Mult(x, y);
-      // R_A_Rt->Mult(x, y);
+      opcon->Mult(x, y);
    }
 
-   void SetOperator(const Operator &op) { R = &op;};
+   void SetOperator(const Operator &op) { A = &op;};
 
 };
-
-class NURBSLORPreconditionerDirect : public Solver
-{
-private:
-   const Operator* R; // transfer matrix from LO->HO
-   const Operator* A; // AMG on LO dofs
-
-public:
-   NURBSLORPreconditionerDirect(
-      const DenseMatrix* R_,
-      const HypreBoomerAMG* A_)
-      : Solver(R_->Height(), R_->Width(), false)
-   {
-      MFEM_VERIFY(R_->Height() == R_->Width(),
-                  "R must be a square matrix");
-      MFEM_VERIFY(A_->Height() == A_->Width(),
-                  "A must be a square matrix");
-      MFEM_VERIFY(R_->Height() == A_->Height(),
-                  "R and A must have the same dimensions");
-      R = R_;
-      A = A_;
-   }
-
-   // y = P x = R A^-1 R^T x
-   void Mult(const Vector &x, Vector &y) const
-   {
-      y = 0.0;
-      Vector z(R->Height());  // Temp vector
-      R->MultTranspose(x, y); // y = R^T x
-      A->Mult(y, z);          // z = A^-1 * R^T x
-      R->Mult(z, y);          // y = R * A^-1 * R^T x
-   }
-
-   void SetOperator(const Operator &op) { R = &op;};
-
-};
-
 
 int main(int argc, char *argv[])
 {
@@ -355,7 +328,7 @@ int main(int argc, char *argv[])
    FiniteElementCollection* fec = mesh.GetNodes()->OwnFEC();
    FiniteElementSpace fespace = FiniteElementSpace(&mesh, fec);
 
-   const long Ndof = fespace.GetTrueVSize();
+   const int Ndof = fespace.GetTrueVSize();
    cout << "Number of finite element unknowns: " << Ndof << endl;
    cout << "Number of elements: " << fespace.GetNE() << endl;
    cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
@@ -418,116 +391,14 @@ int main(int argc, char *argv[])
    {
       cout << "No preconditioner set ... " << endl;
    }
-   // LOR AMG - R = Identity
-   else if (preconditioner == 1)
-   {
-      cout << "Setting up preconditioner (LOR AMG - R = Identity) ... " << endl;
-
-      // Create the LOR mesh
-      const int vdim = fespace.GetVDim();
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule);
-
-      // Write low order mesh to file
-      if (visualization)
-      {
-         ofstream ofs("lo_mesh.mesh");
-         ofs.precision(8);
-         lo_mesh.Print(ofs);
-      }
-
-      FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
-      cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
-      FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec);
-      const long lo_Ndof = lo_fespace.GetTrueVSize();
-      MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
-
-      Array<int> lo_ess_tdof_list, lo_ess_bdr(lo_mesh.bdr_attributes.Max());
-      lo_ess_bdr = 1;
-      // lo_mesh.MarkExternalBoundaries(lo_ess_bdr);
-      lo_fespace.GetEssentialTrueDofs(lo_ess_bdr, lo_ess_tdof_list);
-
-      GridFunction lo_x(&lo_fespace);
-      lo_x = 0.0;
-
-      LinearForm lo_b(&lo_fespace);
-      lo_b.AddDomainIntegrator(new DomainLFIntegrator(one));
-      lo_b.Assemble();
-
-      DiffusionIntegrator *lo_di = new DiffusionIntegrator(one);
-
-      // Set up problem
-      BilinearForm lo_a(&lo_fespace);
-      lo_a.AddDomainIntegrator(lo_di);
-      lo_a.Assemble();
-
-      // Define linear system
-      OperatorPtr lo_A;
-      Vector lo_B, lo_X;
-      lo_a.FormLinearSystem(lo_ess_tdof_list, lo_x, lo_b, lo_A, lo_X, lo_B);
-
-      // Set up HypreBoomerAMG on the low-order problem
-      HYPRE_BigInt row_starts[2] = {0, (int)Ndof};
-      SparseMatrix *lo_Amat = new SparseMatrix(lo_a.SpMat());
-      HypreParMatrix *lo_A_hypre = new HypreParMatrix(
-         MPI_COMM_WORLD,
-         HYPRE_BigInt((int)Ndof),
-         row_starts,
-         lo_Amat
-      );
-      HypreBoomerAMG *lo_P = new HypreBoomerAMG(*lo_A_hypre);
-
-      // Use low-order AMG as preconditioner for high-order problem
-      solver.SetPreconditioner(*lo_P);
-   }
    // LOR AMG
-   else if (preconditioner == 2)
+   else if ((preconditioner == 1) || (preconditioner == 2))
    {
       cout << "Setting up preconditioner (LOR AMG) ... " << endl;
 
       // Create the LOR mesh
       const int vdim = fespace.GetVDim();
-      Rinv = new SparseMatrix(Ndof, Ndof);
-      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, Rinv);
-      Rinv->Finalize();
-      // Rinv->Print(cout);
-      // I think, this is the most correct interpolation, but it may not be ideal
-      // for larger problems. Other options include
-      //   - Form the LO -> HO interpolation matrix instead
-      //   - Use a sparse factorization or iterative solve for R
-      // matrix?
-
-      // DenseMatrix* R = Rinv->ToDenseMatrix();
-      // R->Invert();
-
-
-      int NITER = 1000;
-      SparseMatrix* Rinvt = Transpose(*Rinv);
-
-      // GMRESSolver* R = new GMRESSolver(MPI_COMM_WORLD);
-      // R->SetOperator(*Rinv);
-      // R->SetKDim(NITER);
-      // R->SetMaxIter(NITER);
-      // R->SetAbsTol(0.0);
-      // R->SetRelTol(0.0);
-
-      // GMRESSolver* Rt = new GMRESSolver(MPI_COMM_WORLD);
-      // Rt->SetOperator(*Rinvt);
-      // Rt->SetKDim(NITER);
-      // Rt->SetMaxIter(NITER);
-      // Rt->SetAbsTol(0.0);
-      // Rt->SetRelTol(0.0);
-
-      BiCGSTABSolver* R = new BiCGSTABSolver(MPI_COMM_WORLD);
-      R->SetOperator(*Rinv);
-      R->SetMaxIter(NITER);
-      R->SetAbsTol(0.0);
-      R->SetRelTol(1e-10);
-
-      BiCGSTABSolver* Rt = new BiCGSTABSolver(MPI_COMM_WORLD);
-      Rt->SetOperator(*Rinvt);
-      Rt->SetMaxIter(NITER);
-      Rt->SetAbsTol(0.0);
-      Rt->SetRelTol(1e-10);
+      Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(interp_rule, vdim, NULL);
 
       // Write low order mesh to file
       if (visualization)
@@ -540,20 +411,13 @@ int main(int argc, char *argv[])
       FiniteElementCollection* lo_fec = lo_mesh.GetNodes()->OwnFEC();
       cout << "lo_fec order: " << lo_fec->GetOrder() << endl;
       FiniteElementSpace lo_fespace = FiniteElementSpace(&lo_mesh, lo_fec);
-      const long lo_Ndof = lo_fespace.GetTrueVSize();
+      const int lo_Ndof = lo_fespace.GetTrueVSize();
       MFEM_VERIFY(Ndof == lo_Ndof, "Low-order problem requires same Ndof");
 
       Array<int> lo_ess_tdof_list, lo_ess_bdr(lo_mesh.bdr_attributes.Max());
       lo_ess_bdr = 1;
       // lo_mesh.MarkExternalBoundaries(lo_ess_bdr);
       lo_fespace.GetEssentialTrueDofs(lo_ess_bdr, lo_ess_tdof_list);
-
-      // eliminate rows of R
-      // for (int i = 0; i < ess_tdof_list.Size(); i++)
-      // {
-      //    R->SetRow(ess_tdof_list[i], 0.0);
-      // }
-
 
       GridFunction lo_x(&lo_fespace);
       lo_x = 0.0;
@@ -572,38 +436,35 @@ int main(int argc, char *argv[])
       // Define linear system
       OperatorPtr lo_A;
       Vector lo_B, lo_X;
-      // cout << "lo_ess_tdof_list (size = " << lo_ess_tdof_list.Size() << ")" << endl;
-      // lo_ess_tdof_list.Print(cout, 50);
-      Array<int> nobcs;
-      // lo_a.FormLinearSystem(nobcs, lo_x, lo_b, lo_A, lo_X, lo_B);
       lo_a.FormLinearSystem(lo_ess_tdof_list, lo_x, lo_b, lo_A, lo_X, lo_B);
+      // Array<int> nobcs;
+      // lo_a.FormLinearSystem(nobcs, lo_x, lo_b, lo_A, lo_X, lo_B);
 
       // Set up HypreBoomerAMG on the low-order problem
-      HYPRE_BigInt row_starts[2] = {0, (int)Ndof};
+      HYPRE_BigInt row_starts[2] = {0, Ndof};
       SparseMatrix *lo_Amat = new SparseMatrix(lo_a.SpMat());
       HypreParMatrix *lo_A_hypre = new HypreParMatrix(
          MPI_COMM_WORLD,
-         HYPRE_BigInt((int)Ndof),
+         HYPRE_BigInt(Ndof),
          row_starts,
          lo_Amat
       );
       HypreBoomerAMG *lo_P = new HypreBoomerAMG(*lo_A_hypre);
 
-      // ConstrainedOperator* Rc = new ConstrainedOperator(R, ess_tdof_list);
-      // ConstrainedOperator* Rtc = new ConstrainedOperator(Rt, ess_tdof_list);
-      // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, lo_P);
-      // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(Rc, Rtc, lo_P);
-      NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, ess_tdof_list, lo_P);
-      // NURBSLORPreconditionerDirect *P = new NURBSLORPreconditionerDirect(R, lo_P);
+      if (preconditioner == 1)
+      {
+         cout << "LOR AMG: R = Identity ... " << endl;
+         solver.SetPreconditioner(*lo_P);
+      }
+      else
+      {
+         cout << "LOR AMG: R = X^-1 ... " << endl;
 
-
-      // R->PrintMatlab(cout);
-
-
-      // Use low-order AMG as preconditioner for high-order problem
-      // solver.SetPreconditioner(*lo_P);
-      solver.SetPreconditioner(*P);
-
+         // NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh);
+         // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, ess_tdof_list, lo_P);
+         NURBSLORPreconditioner *P = new NURBSLORPreconditioner(&mesh, &lo_mesh, ess_tdof_list, lo_P);
+         solver.SetPreconditioner(*P);
+      }
    }
    else
    {
@@ -635,8 +496,8 @@ int main(int argc, char *argv[])
 
    // 13. Collect results and write to file
    const long Niter = solver.GetNumIterations();
-   const long dof_per_sec_solve = Ndof * Niter / timeSolve;
-   const long dof_per_sec_total = Ndof * Niter / timeTotal;
+   const long dof_per_sec_solve = (long)Ndof * Niter / timeSolve;
+   const long dof_per_sec_total = (long)Ndof * Niter / timeTotal;
    cout << "Time to assemble: " << timeAssemble << " seconds" << endl;
    cout << "Time to solve: " << timeSolve << " seconds" << endl;
    cout << "Total time: " << timeTotal << " seconds" << endl;
