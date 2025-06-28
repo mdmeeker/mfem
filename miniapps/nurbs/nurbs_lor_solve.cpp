@@ -18,6 +18,8 @@
 using namespace std;
 using namespace mfem;
 
+#include "linalg/dtensor.hpp"
+
 // Class for applying the action of a Kronecker product using the
 // Pot-RwCl algorithm
 //
@@ -27,12 +29,14 @@ class KroneckerProduct
 {
 private:
    Array<DenseMatrix*> A;
+   SparseMatrix* R;
    int K;               // number of matrices
    Array<int> rows;     // sizes of each matrix
    Array<int> cols;
    int N;               // total number of rows
+   int M;               // total number of cols
 public:
-   KroneckerProduct(const Array<DenseMatrix*> &A_) : A(A_)
+   KroneckerProduct(const Array<DenseMatrix*> &A) : A(A)
    {
       K = A.Size();
       rows.SetSize(K);
@@ -43,11 +47,12 @@ public:
          cols[k] = A[k]->Width();
       }
       N = rows.Prod();
+      M = cols.Prod();
    }
 
    void Mult(const Vector &x, Vector &y) const
    {
-      MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
+      MFEM_VERIFY(x.Size() == M, "Input vector must have size " << M);
       y.SetSize(N);
       y = 0.0;
       PotRwCl(K-1, 0, 0, 1.0, x, y, false);
@@ -56,7 +61,7 @@ public:
    void MultTranspose(const Vector &x, Vector &y) const
    {
       MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
-      y.SetSize(N);
+      y.SetSize(M);
       y = 0.0;
       PotRwCl(K-1, 0, 0, 1.0, x, y, true);
    }
@@ -67,10 +72,14 @@ public:
       const DenseMatrix &Ak = *A[k];
       for (int i = 0; i < rows[k]; i++)
       {
+         // int col0 = std::min(0, i-4);
+         // int col1 = std::min(cols[k]-1, i+4);
+         // for (int j = col0; j < col1; j++)
          for (int j = 0; j < cols[k]; j++)
          {
             real_t a = transpose ? Ak(j, i) : Ak(i, j);
-            if (a == 0) { continue; }
+            // if (abs(a) <= 1.0e-4) { continue; }
+            if (a == 0.0) { continue; }
 
             int new_r = r * rows[k] + i;
             int new_c = c * cols[k] + j;
@@ -87,6 +96,75 @@ public:
          }
       }
    }
+
+   void SumFactorMult2D(const Vector &Xv, Vector &Yv, int bwx=8, int bwy=8)
+   {
+      // Accumulator
+      Vector sumX(rows[0]);
+      // Reshape
+      const auto X = Reshape(Xv.HostRead(), cols[0], cols[1]);
+      Yv.SetSize(N);
+      Yv = 0.0;
+      const auto Y = Reshape(Yv.HostReadWrite(), rows[0], rows[1]);
+      const DenseMatrix &Ax = *A[0];
+      const DenseMatrix &Ay = *A[1];
+
+      for (int jy = 0; jy < cols[1]; jy++)
+      {
+         sumX = 0.0;
+         for (int jx = 0; jx < cols[0]; jx++)
+         {
+            const real_t x = X(jx, jy);
+            for (int ix = 0; ix < rows[0]; ix++) // replace with bw?
+            {
+               sumX[ix] += x * Ax(ix, jx);
+            }
+         }
+         for (int iy = 0; iy < rows[1]; iy++)
+         {
+            real_t y = Ay(iy, jy);
+            for (int ix = 0; ix < rows[0]; ix++)
+            {
+               Y(ix, iy) += sumX[ix] * y;
+            }
+         }
+      }
+   }
+
+   void SumFactorMultTranspose2D(const Vector &Xv, Vector &Yv, int bwx=8, int bwy=8)
+   {
+      // Accumulator
+      Vector sumX(cols[0]);
+      // Reshape
+      const auto X = Reshape(Xv.HostRead(), rows[0], rows[1]);
+      Yv.SetSize(M);
+      Yv = 0.0;
+      const auto Y = Reshape(Yv.HostReadWrite(), cols[0], cols[1]);
+      const DenseMatrix &Ax = *A[0];
+      const DenseMatrix &Ay = *A[1];
+
+      for (int iy = 0; iy < rows[1]; iy++)
+      {
+         sumX = 0.0;
+         for (int ix = 0; ix < rows[0]; ix++)
+         {
+            const real_t x = X(ix, iy);
+            for (int jx = 0; jx < cols[0]; jx++)
+            {
+               sumX[jx] += x * Ax(ix, jx);
+            }
+         }
+         for (int jy = 0; jy < cols[1]; jy++)
+         {
+            real_t y = Ay(iy, jy);
+            for (int jx = 0; jx < cols[0]; jx++)
+            {
+               Y(jx, jy) += sumX[jx] * y;
+            }
+         }
+      }
+   }
+
 };
 
 
@@ -184,7 +262,8 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(lo_p2g[p], xp);
-         kron[p]->Mult(xp, yp);
+         // kron[p]->Mult(xp, yp);
+         kron[p]->SumFactorMult2D(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
       }
    }
@@ -198,7 +277,8 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(ho_p2g[p], xp);
-         kron[p]->MultTranspose(xp, yp);
+         // kron[p]->MultTranspose(xp, yp);
+         kron[p]->SumFactorMultTranspose2D(xp, yp);
          y.SetSubVector(lo_p2g[p], yp);
       }
    }
