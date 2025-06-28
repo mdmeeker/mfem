@@ -101,7 +101,6 @@ private:
    int ho_Ndof; // Number of dofs in HO mesh
    int lo_Ndof; // Number of dofs in LO mesh
 
-   Array2D<SparseMatrix*> X; // transfer matrices from HO->LO, per patch/dimension
    Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
    Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
 
@@ -109,7 +108,7 @@ private:
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
 
 public:
-   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, int vdim = 1) :
+   NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, real_t threshold = 0.0, int vdim = 1) :
       ho_mesh(ho_mesh),
       lo_mesh(lo_mesh),
       vdim(vdim),
@@ -126,8 +125,7 @@ public:
       MFEM_VERIFY(dim == lo_mesh->NURBSext->Dimension(),
                "Meshes must have the same topological dimension.");
 
-      // Collect X, R, and kron
-      X.SetSize(NP, dim);
+      // Collect R, and kron
       R.SetSize(NP, dim);
       kron.SetSize(NP);
       for (int p = 0; p < NP; p++)
@@ -140,10 +138,25 @@ public:
          for (int d = 0; d < dim; d++)
          {
             lo_kvs[d]->GetUniqueKnots(u);
-            X(p, d) = new SparseMatrix(ho_kvs[d]->GetInterpolationMatrix(u));
-            X(p, d)->Finalize();
-            R(p, d) = new DenseMatrix(*X(p, d)->ToDenseMatrix());
+            SparseMatrix X(ho_kvs[d]->GetInterpolationMatrix(u));
+            X.Finalize();
+            R(p, d) = new DenseMatrix(*X.ToDenseMatrix());
             R(p, d)->Invert();
+
+            // Threshold
+            if (threshold > 0.0)
+            {
+               for (int i = 0; i < R(p, d)->Height(); i++)
+               {
+                  for (int j = 0; j < R(p, d)->Width(); j++)
+                  {
+                     if (std::abs((*R(p, d))(i, j)) < threshold)
+                     {
+                        (*R(p, d))(i, j) = 0.0;
+                     }
+                  }
+               }
+            }
          }
 
          // Create classes for taking kron prod
@@ -235,18 +248,13 @@ private:
    const ConstrainedOperator* opcon;
 
 public:
-   // NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh);
-   // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(mesh, lo_mesh, ess_tdof_list, lo_P);
    NURBSLORPreconditioner(
-      Mesh* ho_mesh,
-      Mesh* lo_mesh,
+      NURBSInterpolator* R,
       const Array<int> & ess_tdof_list,
-      const HypreBoomerAMG* A_)
-   : Solver(A_->Height(), A_->Width(), false)
-   , A(A_)
+      const HypreBoomerAMG* A)
+   : Solver(A->Height(), A->Width(), false)
+   , R(R), A(A)
    {
-      NURBSInterpolator* R = new NURBSInterpolator(ho_mesh, lo_mesh);
-
       op = new R_A_Rt(R, A);
       opcon = new ConstrainedOperator(op, ess_tdof_list);
    }
@@ -254,7 +262,7 @@ public:
    // y = P x = R A^-1 R^T x
    void Mult(const Vector &x, Vector &y) const
    {
-      // y = 0.0;
+      y = 0.0;
       opcon->Mult(x, y);
    }
 
@@ -460,9 +468,9 @@ int main(int argc, char *argv[])
       {
          cout << "LOR AMG: R = X^-1 ... " << endl;
 
-         // NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh);
+         NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh, 1.0e-2);
          // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, ess_tdof_list, lo_P);
-         NURBSLORPreconditioner *P = new NURBSLORPreconditioner(&mesh, &lo_mesh, ess_tdof_list, lo_P);
+         NURBSLORPreconditioner *P = new NURBSLORPreconditioner(interpolator, ess_tdof_list, lo_P);
          solver.SetPreconditioner(*P);
       }
    }
