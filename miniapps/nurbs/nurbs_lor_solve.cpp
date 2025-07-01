@@ -29,22 +29,26 @@ class KroneckerProduct
 {
 private:
    Array<DenseMatrix*> A;
-   SparseMatrix* R;
    int K;               // number of matrices
    Array<int> rows;     // sizes of each matrix
    Array<int> cols;
    int N;               // total number of rows
    int M;               // total number of cols
+   // Bandwidths for each matrix (0 is unset)
+   Array<int> BW;
 public:
    KroneckerProduct(const Array<DenseMatrix*> &A) : A(A)
    {
       K = A.Size();
+      MFEM_VERIFY((K==2) || (K==3), "Must be 2 or 3 dimensions")
       rows.SetSize(K);
       cols.SetSize(K);
+      BW.SetSize(K);
       for (int k = 0; k < K; k++)
       {
          rows[k] = A[k]->Height();
          cols[k] = A[k]->Width();
+         BW[k] = rows[k];
       }
       N = rows.Prod();
       M = cols.Prod();
@@ -55,7 +59,10 @@ public:
       MFEM_VERIFY(x.Size() == M, "Input vector must have size " << M);
       y.SetSize(N);
       y = 0.0;
-      PotRwCl(K-1, 0, 0, 1.0, x, y, false);
+      if (K == 2)
+      {
+         SumFactorMult2D<false>(x, y);
+      }
    }
 
    void MultTranspose(const Vector &x, Vector &y) const
@@ -63,67 +70,55 @@ public:
       MFEM_VERIFY(x.Size() == N, "Input vector must have size " << N);
       y.SetSize(M);
       y = 0.0;
-      PotRwCl(K-1, 0, 0, 1.0, x, y, true);
-   }
-
-   void PotRwCl(int k, int r, int c, real_t value,
-                const Vector &x, Vector &y, bool transpose = false) const
-   {
-      const DenseMatrix &Ak = *A[k];
-      for (int i = 0; i < rows[k]; i++)
+      if (K == 2)
       {
-         // int col0 = std::min(0, i-4);
-         // int col1 = std::min(cols[k]-1, i+4);
-         // for (int j = col0; j < col1; j++)
-         for (int j = 0; j < cols[k]; j++)
-         {
-            real_t a = transpose ? Ak(j, i) : Ak(i, j);
-            // if (abs(a) <= 1.0e-4) { continue; }
-            if (a == 0.0) { continue; }
-
-            int new_r = r * rows[k] + i;
-            int new_c = c * cols[k] + j;
-            real_t new_value = value * a;
-
-            if (k == 0)
-            {
-               y[new_r] += new_value * x[new_c];
-            }
-            else
-            {
-               PotRwCl(k - 1, new_r, new_c, new_value, x, y, transpose);
-            }
-         }
+         SumFactorMult2D<true>(x, y);
       }
+      // else if (K == 3)
+      // {
+      // }
+
    }
 
-   void SumFactorMult2D(const Vector &Xv, Vector &Yv, int bwx=8, int bwy=8)
+   template<bool transpose = false>
+   void SumFactorMult2D(const Vector &Xv, Vector &Yv) const
    {
-      // Accumulator
-      Vector sumX(rows[0]);
+      // Outer/inner loop sizes
+      int OY = transpose ? rows[1] : cols[1];
+      int OX = transpose ? rows[0] : cols[0];
+      int IY = transpose ? cols[1] : rows[1];
+      int IX = transpose ? cols[0] : rows[0];
+      // Accumulator(s)
+      Vector sumX(OX);
       // Reshape
-      const auto X = Reshape(Xv.HostRead(), cols[0], cols[1]);
-      Yv.SetSize(N);
-      Yv = 0.0;
-      const auto Y = Reshape(Yv.HostReadWrite(), rows[0], rows[1]);
+      const auto X = Reshape(Xv.HostRead(), OX, OY);
+      const auto Y = Reshape(Yv.HostReadWrite(), IX, IY);
       const DenseMatrix &Ax = *A[0];
       const DenseMatrix &Ay = *A[1];
+      // Half bandwidth (symmetric)
+      int bwx = std::floor(BW[0] / 2.0);
+      int bwy = std::floor(BW[1] / 2.0);
 
-      for (int jy = 0; jy < cols[1]; jy++)
+      for (int oy = 0; oy < OY; oy++)
       {
          sumX = 0.0;
-         for (int jx = 0; jx < cols[0]; jx++)
+         for (int ox = 0; ox < OX; ox++)
          {
-            const real_t x = X(jx, jy);
-            for (int ix = 0; ix < rows[0]; ix++) // replace with bw?
+            const real_t x = X(ox, oy);
+            const int min_ix = std::max(0, ox - bwx);
+            const int max_ix = std::min(IX, ox + bwx + 1);
+            for (int ix = min_ix; ix < max_ix; ix++)
             {
-               sumX[ix] += x * Ax(ix, jx);
+               const real_t ax = transpose ? Ax(ox, ix) : Ax(ix, ox);
+               sumX[ix] += x * ax;
             }
          }
-         for (int iy = 0; iy < rows[1]; iy++)
+         const int min_iy = std::max(0, oy - bwy);
+         const int max_iy = std::min(IY, oy + bwy + 1);
+         for (int iy = min_iy; iy < max_iy; iy++)
          {
-            real_t y = Ay(iy, jy);
-            for (int ix = 0; ix < rows[0]; ix++)
+            const real_t y = transpose ? Ay(oy, iy) : Ay(iy, oy);
+            for (int ix = 0; ix < IX; ix++)
             {
                Y(ix, iy) += sumX[ix] * y;
             }
@@ -131,36 +126,65 @@ public:
       }
    }
 
-   void SumFactorMultTranspose2D(const Vector &Xv, Vector &Yv, int bwx=8, int bwy=8)
+   DenseMatrix GetBanded(const DenseMatrix& M, int bw)
    {
-      // Accumulator
-      Vector sumX(cols[0]);
-      // Reshape
-      const auto X = Reshape(Xv.HostRead(), rows[0], rows[1]);
-      Yv.SetSize(M);
-      Yv = 0.0;
-      const auto Y = Reshape(Yv.HostReadWrite(), cols[0], cols[1]);
-      const DenseMatrix &Ax = *A[0];
-      const DenseMatrix &Ay = *A[1];
+      const int I = M.Height();
+      const int J = M.Width();
+      MFEM_VERIFY((bw > 0) && (bw <= J), "Invalid bandwidth")
+      int bwx = std::floor(bw / 2.0);
+      DenseMatrix banded(I, J);
+      banded = 0.0;
 
-      for (int iy = 0; iy < rows[1]; iy++)
+      for (int i = 0; i < I; i++)
       {
-         sumX = 0.0;
-         for (int ix = 0; ix < rows[0]; ix++)
+         const int min_j = std::max(0, i - bwx);
+         const int max_j = std::min(J, i + bwx + 1);
+         for (int j = min_j; j < max_j; j++)
          {
-            const real_t x = X(ix, iy);
-            for (int jx = 0; jx < cols[0]; jx++)
-            {
-               sumX[jx] += x * Ax(ix, jx);
-            }
+            banded(i, j) = M(i, j);
          }
-         for (int jy = 0; jy < cols[1]; jy++)
+      }
+      // Debugging
+      cout << "original matrix norm = " << M.FNorm2() << endl;
+      cout << "banded matrix (bw " << bw << ") norm = " << banded.FNorm2() << endl;
+      return banded;
+   }
+
+   // Computes the quantity
+   // || A[k] * banded(A[k]^-1, bw) - I ||_{F2} / || A[k] ||_{F2}
+   // which is a metric for how well the banded inverse approximates
+   // the full inverse.
+   real_t BandedInverseNorm(int k, int bw)
+   {
+      const DenseMatrix &Ak = *A[k];
+      MFEM_VERIFY(rows[k] == cols[k], "Only square matrices");
+      const DenseMatrix Akb = GetBanded(Ak, bw);
+      DenseMatrix Akbi(Akb);
+      Akbi.Invert();
+      // numerator = Ak * Akb.Inverse() - I
+      DenseMatrix numerator(rows[k], rows[k]);
+      mfem::Mult(Ak, Akbi, numerator);
+      for (int i = 0; i < rows[k]; i++)
+      {
+         numerator(i, i) -= 1.0;
+      }
+
+      return numerator.FNorm2() / Ak.FNorm2();
+   }
+
+   // Set bandwidth for kth matrix such that BandedIvnerseNorm < tol
+   void SetBandwidth(int k, real_t tol = 1e-5, int bw0 = 1)
+   {
+      MFEM_VERIFY((k >= 0) && (k < K), "Invalid matrix index");
+      for (int bw = bw0; bw <= cols[k]; bw += 2)
+      {
+         real_t norm = BandedInverseNorm(k, bw);
+         if (norm < tol)
          {
-            real_t y = Ay(iy, jy);
-            for (int jx = 0; jx < cols[0]; jx++)
-            {
-               Y(jx, jy) += sumX[jx] * y;
-            }
+            BW[k] = bw;
+            cout << "Set bandwidth for index " << k << " to " << bw
+                 << ". norm = " << norm << endl;
+            return;
          }
       }
    }
@@ -180,12 +204,14 @@ private:
    int lo_Ndof; // Number of dofs in LO mesh
 
    Array2D<DenseMatrix*> R; // transfer matrices from LO->HO, per patch/dimension
-   Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
-
    std::vector<Array<int>> ho_p2g; // Patch to global mapping for HO mesh
    std::vector<Array<int>> lo_p2g; // Patch to global mapping for LO mesh
 
+   Array2D<int> orders; // Order of basis per patch/dimension
+
 public:
+   Array<KroneckerProduct*> kron; // Kronecker product actions for each patch
+
    NURBSInterpolator(Mesh* ho_mesh, Mesh* lo_mesh, real_t threshold = 0.0, int vdim = 1) :
       ho_mesh(ho_mesh),
       lo_mesh(lo_mesh),
@@ -205,6 +231,7 @@ public:
 
       // Collect R, and kron
       R.SetSize(NP, dim);
+      orders.SetSize(NP, dim);
       kron.SetSize(NP);
       for (int p = 0; p < NP; p++)
       {
@@ -215,32 +242,22 @@ public:
          Vector u;
          for (int d = 0; d < dim; d++)
          {
+            orders(p, d) = ho_kvs[d]->GetOrder();
             lo_kvs[d]->GetUniqueKnots(u);
             SparseMatrix X(ho_kvs[d]->GetInterpolationMatrix(u));
             X.Finalize();
             R(p, d) = new DenseMatrix(*X.ToDenseMatrix());
             R(p, d)->Invert();
-
-            // Threshold
-            if (threshold > 0.0)
-            {
-               for (int i = 0; i < R(p, d)->Height(); i++)
-               {
-                  for (int j = 0; j < R(p, d)->Width(); j++)
-                  {
-                     if (std::abs((*R(p, d))(i, j)) < threshold)
-                     {
-                        (*R(p, d))(i, j) = 0.0;
-                     }
-                  }
-               }
-            }
          }
 
          // Create classes for taking kron prod
          Array<DenseMatrix*> A(dim);
          R.GetRow(p, A);
          kron[p] = new KroneckerProduct(A);
+      }
+      if (threshold > 0)
+      {
+         SetBandwidths(threshold, false);
       }
 
       // Collect patch to global mappings
@@ -262,8 +279,8 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(lo_p2g[p], xp);
-         // kron[p]->Mult(xp, yp);
-         kron[p]->SumFactorMult2D(xp, yp);
+         kron[p]->Mult(xp, yp);
+         // kron[p]->SumFactorMult2D(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
       }
    }
@@ -277,9 +294,22 @@ public:
       for (int p = 0; p < NP; p++)
       {
          x.GetSubVector(ho_p2g[p], xp);
-         // kron[p]->MultTranspose(xp, yp);
-         kron[p]->SumFactorMultTranspose2D(xp, yp);
+         kron[p]->MultTranspose(xp, yp);
+         // kron[p]->SumFactorMultTranspose2D(xp, yp);
          y.SetSubVector(lo_p2g[p], yp);
+      }
+   }
+
+   // bw0 = order*2 + 1 is a good initial guess
+   void SetBandwidths(real_t tol = 1.0e-5, bool guess_bw0 = true)
+   {
+      for (int p = 0; p < NP; p++)
+      {
+         for (int d = 0; d < dim; d++)
+         {
+            const int bw0 = (guess_bw0) ? (orders(p, d) * 2 + 1) : 1;
+            kron[p]->SetBandwidth(d, tol, bw0);
+         }
       }
    }
 
@@ -362,7 +392,7 @@ int main(int argc, char *argv[])
    bool patchAssembly = false;
    int ref_levels = 0;
    int nurbs_degree_increase = 0;  // Elevate the NURBS mesh degree by this
-   int interp_rule_ = 0;
+   int interp_rule_ = 1;
    int preconditioner = 0;
    bool visualization = false;
 
@@ -395,6 +425,7 @@ int main(int argc, char *argv[])
    // 2. Read the mesh from the given mesh file.
    Mesh mesh(mesh_file, 1, 1);
    const int dim = mesh.Dimension();
+   const int NP = mesh.NURBSext->GetNP();
 
    // Verify mesh is valid for this problem
    MFEM_VERIFY(mesh.IsNURBS(), "Example is for NURBS meshes");
@@ -419,7 +450,7 @@ int main(int argc, char *argv[])
    const int Ndof = fespace.GetTrueVSize();
    cout << "Number of finite element unknowns: " << Ndof << endl;
    cout << "Number of elements: " << fespace.GetNE() << endl;
-   cout << "Number of patches: " << mesh.NURBSext->GetNP() << endl;
+   cout << "Number of patches: " << NP << endl;
 
    // 6. Determine the list of true (i.e. conforming) essential boundary dofs.
    Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
@@ -548,8 +579,8 @@ int main(int argc, char *argv[])
       {
          cout << "LOR AMG: R = X^-1 ... " << endl;
 
-         NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh, 1.0e-2);
-         // NURBSLORPreconditioner *P = new NURBSLORPreconditioner(R, Rt, ess_tdof_list, lo_P);
+         NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh, 1e-5);
+         // interpolator->SetBandwidths(1e-4); // uses initial guess of order*2+1
          NURBSLORPreconditioner *P = new NURBSLORPreconditioner(interpolator, ess_tdof_list, lo_P);
          solver.SetPreconditioner(*P);
       }

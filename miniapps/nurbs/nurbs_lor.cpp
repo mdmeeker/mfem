@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
 
    SparseMatrix* X = new SparseMatrix(Ndof, Ndof);
    Mesh lo_mesh = mesh.GetLowOrderNURBSMesh(NURBSInterpolationRule::Botella, vdim, X);
-   if (printX) { Save("X.txt", X); }
+   // if (printX) { Save("X.txt", X); }
    cout << "Finished creating low-order mesh." << endl;
 
    // Get dimension interpolation matrices: X1, X2, X3
