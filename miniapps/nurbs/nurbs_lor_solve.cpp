@@ -61,7 +61,11 @@ public:
       y = 0.0;
       if (K == 2)
       {
-         SumFactorMult2D<false>(x, y);
+         SumFactor2D<false>(x, y);
+      }
+      else if (K == 3)
+      {
+         SumFactor3D<false>(x, y);
       }
    }
 
@@ -72,16 +76,17 @@ public:
       y = 0.0;
       if (K == 2)
       {
-         SumFactorMult2D<true>(x, y);
+         SumFactor2D<true>(x, y);
       }
-      // else if (K == 3)
-      // {
-      // }
+      else if (K == 3)
+      {
+         SumFactor3D<true>(x, y);
+      }
 
    }
 
    template<bool transpose = false>
-   void SumFactorMult2D(const Vector &Xv, Vector &Yv) const
+   void SumFactor2D(const Vector &Xv, Vector &Yv) const
    {
       // Outer/inner loop sizes
       int OY = transpose ? rows[1] : cols[1];
@@ -89,15 +94,15 @@ public:
       int IY = transpose ? cols[1] : rows[1];
       int IX = transpose ? cols[0] : rows[0];
       // Accumulator(s)
-      Vector sumX(OX);
+      Vector sumX(IX);
       // Reshape
       const auto X = Reshape(Xv.HostRead(), OX, OY);
       const auto Y = Reshape(Yv.HostReadWrite(), IX, IY);
+      // Aliases
       const DenseMatrix &Ax = *A[0];
       const DenseMatrix &Ay = *A[1];
-      // Half bandwidth (symmetric)
-      int bwx = std::floor(BW[0] / 2.0);
-      int bwy = std::floor(BW[1] / 2.0);
+      const int bwx = std::floor(BW[0] / 2.0); // One-sided bandwidth
+      const int bwy = std::floor(BW[1] / 2.0);
 
       for (int oy = 0; oy < OY; oy++)
       {
@@ -110,7 +115,7 @@ public:
             for (int ix = min_ix; ix < max_ix; ix++)
             {
                const real_t ax = transpose ? Ax(ox, ix) : Ax(ix, ox);
-               sumX[ix] += x * ax;
+               sumX(ix) += x * ax;
             }
          }
          const int min_iy = std::max(0, oy - bwy);
@@ -120,10 +125,83 @@ public:
             const real_t y = transpose ? Ay(oy, iy) : Ay(iy, oy);
             for (int ix = 0; ix < IX; ix++)
             {
-               Y(ix, iy) += sumX[ix] * y;
+               Y(ix, iy) += sumX(ix) * y;
             }
          }
       }
+   }
+
+   template<bool transpose = false>
+   void SumFactor3D(const Vector &Xv, Vector &Yv) const
+   {
+      // Outer/inner loop sizes
+      int OZ = transpose ? rows[2] : cols[2];
+      int OY = transpose ? rows[1] : cols[1];
+      int OX = transpose ? rows[0] : cols[0];
+      int IZ = transpose ? cols[2] : rows[2];
+      int IY = transpose ? cols[1] : rows[1];
+      int IX = transpose ? cols[0] : rows[0];
+      // Accumulator(s)
+      Vector sumXYv(IX*IY);
+      Vector sumX(IX);
+      // Reshape
+      const auto X = Reshape(Xv.HostRead(), OX, OY, OZ);
+      const auto Y = Reshape(Yv.HostReadWrite(), IX, IY, IZ);
+      auto sumXY = Reshape(sumXYv.HostReadWrite(), OX, OY);
+      // Aliases
+      const DenseMatrix &Ax = *A[0];
+      const DenseMatrix &Ay = *A[1];
+      const DenseMatrix &Az = *A[2];
+      const int bwx = std::floor(BW[0] / 2.0); // One-sided bandwidth
+      const int bwy = std::floor(BW[1] / 2.0);
+      const int bwz = std::floor(BW[2] / 2.0);
+
+      for (int oz = 0; oz < OZ; oz++)
+      {
+         sumXYv = 0.0;
+         for (int oy = 0; oy < OY; oy++)
+         {
+            sumX = 0.0;
+            // oz, oy, ox, ix
+            for (int ox = 0; ox < OX; ox++)
+            {
+               const real_t x = X(ox, oy, oz);
+               const int min_ix = std::max(0, ox - bwx);
+               const int max_ix = std::min(IX, ox + bwx + 1);
+               for (int ix = min_ix; ix < max_ix; ix++)
+               {
+                  const real_t ax = transpose ? Ax(ox, ix) : Ax(ix, ox);
+                  sumX(ix) += x * ax;
+               }
+            }
+            // oz, oy, iy, ix
+            const int min_iy = std::max(0, oy - bwy);
+            const int max_iy = std::min(IY, oy + bwy + 1);
+            for (int iy = min_iy; iy < max_iy; iy++)
+            {
+               const real_t y = transpose ? Ay(oy, iy) : Ay(iy, oy);
+               for (int ix = 0; ix < IX; ix++)
+               {
+                  sumXY(ix,iy) += sumX(ix) * y;
+               }
+            }
+         } // for (oy)
+
+         // oz, iz, iy, ix
+         const int min_iz = std::max(0, oz - bwz);
+         const int max_iz = std::min(IZ, oz + bwz + 1);
+         for (int iz = min_iz; iz < max_iz; iz++)
+         {
+            const real_t z = transpose ? Az(oz, iz) : Az(iz, oz);
+            for (int iy = 0; iy < IY; iy++)
+            {
+               for (int ix = 0; ix < IX; ix++)
+               {
+                  Y(ix, iy, iz) += sumXY(ix, iy) * z;
+               }
+            }
+         }
+      } // for (oz)
    }
 
    DenseMatrix GetBanded(const DenseMatrix& M, int bw)
@@ -280,7 +358,6 @@ public:
       {
          x.GetSubVector(lo_p2g[p], xp);
          kron[p]->Mult(xp, yp);
-         // kron[p]->SumFactorMult2D(xp, yp);
          y.SetSubVector(ho_p2g[p], yp);
       }
    }
@@ -295,7 +372,6 @@ public:
       {
          x.GetSubVector(ho_p2g[p], xp);
          kron[p]->MultTranspose(xp, yp);
-         // kron[p]->SumFactorMultTranspose2D(xp, yp);
          y.SetSubVector(lo_p2g[p], yp);
       }
    }
@@ -500,10 +576,7 @@ int main(int argc, char *argv[])
    // We define solver here because SetOperator needs to be used before
    // SetPreconditioner *if* we are using hypre
    CGSolver solver(MPI_COMM_WORLD);
-   // GMRESSolver solver(MPI_COMM_WORLD);
-   // solver.SetKDim(1000);
    solver.SetOperator(*A);
-   SparseMatrix* Rinv = nullptr;
 
    // No preconditioner
    if (preconditioner == 0)
