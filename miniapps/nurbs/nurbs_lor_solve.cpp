@@ -20,11 +20,7 @@ using namespace mfem;
 
 #include "linalg/dtensor.hpp"
 
-// Class for applying the action of a Kronecker product using the
-// Pot-RwCl algorithm
-//
-// Reference: Complexity of Memory-Efficient Kronecker Operations with
-//            Applications to the Solution of Markov Models
+// Applies the action of a Kronecker product using sum factorization
 class KroneckerProduct
 {
 private:
@@ -652,8 +648,8 @@ int main(int argc, char *argv[])
       {
          cout << "LOR AMG: R = X^-1 ... " << endl;
 
-         NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh, 1e-5);
-         // interpolator->SetBandwidths(1e-4); // uses initial guess of order*2+1
+         NURBSInterpolator* interpolator = new NURBSInterpolator(&mesh, &lo_mesh);
+         interpolator->SetBandwidths(1e-5, true); // uses initial guess of order*2+1
          NURBSLORPreconditioner *P = new NURBSLORPreconditioner(interpolator, ess_tdof_list, lo_P);
          solver.SetPreconditioner(*P);
       }
